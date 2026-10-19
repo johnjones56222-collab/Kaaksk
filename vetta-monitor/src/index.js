@@ -57,15 +57,37 @@ async function runCheck(env) {
   return result;
 }
 
+// Live up/down for browsers. At most one real Vetta request per LIVE_TTL_MS,
+// so page loads can't flood Vetta. Doesn't touch on/off or send notifications.
+const LIVE_TTL_MS = 120_000;
+let liveMemo = null;
+
+async function liveStatus(req, env) {
+  const cors = { "access-control-allow-origin": "*", "content-type": "application/json" };
+  if (req.method === "OPTIONS") return new Response(null, { headers: { ...cors, "access-control-allow-methods": "GET" } });
+
+  const fresh = (s) => s && Date.now() - Date.parse(s.checked_at) < LIVE_TTL_MS;
+  let status = fresh(liveMemo) ? liveMemo : JSON.parse((await env.KV.get("live")) || "null");
+  if (!fresh(status)) {
+    const r = await checkVetta(env);
+    status = { up: r.up, detail: r.detail, checked_at: new Date().toISOString() };
+    await env.KV.put("live", JSON.stringify(status));
+  }
+  liveMemo = status;
+  return new Response(JSON.stringify(status), { headers: { ...cors, "cache-control": "no-store" } });
+}
+
 export default {
   async scheduled(_event, env, ctx) {
     if (await isOn(env)) ctx.waitUntil(runCheck(env));
   },
 
+  // Public: /live (up/down only, for the Nexus header badge)
   // Private links, all need ?token=ADMIN_TOKEN:
   //   /on  /off  /status  /check (run one check now)
   async fetch(req, env) {
     const url = new URL(req.url);
+    if (url.pathname === "/live") return liveStatus(req, env);
     if (!env.ADMIN_TOKEN || url.searchParams.get("token") !== env.ADMIN_TOKEN)
       return new Response("unauthorized", { status: 401 });
 
