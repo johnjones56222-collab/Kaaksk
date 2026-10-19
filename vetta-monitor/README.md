@@ -15,6 +15,9 @@ header badge. At most one real Vetta request every 2 minutes.
 - `/off`    stop watching
 - `/status` on/off state and the check log
 - `/check`  run one check now
+- `/test`   send a test notification
 
-Secrets (not in this repo): `VETTA_KEY`, `NTFY_TOPIC`, `ADMIN_TOKEN`.
+Secrets (not in this repo): `VETTA_KEY`, `NTFY_TOPIC`, `ADMIN_TOKEN`, and optionally
+`NTFY_TOKEN` (an ntfy.sh access token, so sends count against your account
+instead of the per-IP limit Workers share).
 Redeploy with `npx wrangler deploy`.

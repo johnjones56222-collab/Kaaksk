@@ -27,12 +27,22 @@ async function checkVetta(env) {
   }
 }
 
+// ntfy.sh rate-limits per IP, and Workers share IPs, so retry a few times.
+// NTFY_TOKEN (optional secret) sends as your ntfy account, avoiding the shared limit.
 async function notify(env, title, message) {
-  await fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, {
-    method: "POST",
-    headers: { Title: title, Tags: "white_check_mark", Priority: "high" },
-    body: message,
-  });
+  const headers = { Title: title, Tags: "white_check_mark", Priority: "high" };
+  if (env.NTFY_TOKEN) headers.Authorization = `Bearer ${env.NTFY_TOKEN}`;
+  let res;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 3000 * attempt));
+    try {
+      res = await fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, { method: "POST", headers, body: message });
+      if (res.ok) return res;
+    } catch (err) {
+      res = new Response(err.message, { status: 599 });
+    }
+  }
+  return res;
 }
 
 async function addLog(env, entry) {
@@ -51,8 +61,11 @@ async function runCheck(env) {
 
   if (result.up) {
     const time = new Date().toISOString().slice(11, 16) + " UTC";
-    await env.KV.put("off", "1");
-    await notify(env, "Vetta is working", `LLM request succeeded at ${time}. Monitor is now off.`);
+    const sent = await notify(env, "Vetta is working", `LLM request succeeded at ${time}. Monitor is now off.`);
+    // Only turn off once you've actually been told; otherwise retry next hour
+    if (sent.ok) await env.KV.put("off", "1");
+    else await addLog(env, { status: "warn", detail: `notification failed (HTTP ${sent.status}), will retry next hour` });
+    result.notified = sent.ok;
   }
   return result;
 }
@@ -84,7 +97,7 @@ export default {
 
   // Public: /live (up/down only, for the Nexus header badge)
   // Private links, all need ?token=ADMIN_TOKEN:
-  //   /on  /off  /status  /check (run one check now)
+  //   /on  /off  /status  /check (run one check now)  /test (send a test notification)
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname === "/live") return liveStatus(req, env);
@@ -103,7 +116,12 @@ export default {
       case "/check": {
         if (!(await isOn(env))) return new Response("Monitor is OFF. Open /on first.\n");
         const r = await runCheck(env);
-        return new Response(r.up ? "Vetta works. Notification sent, monitor turned off.\n" : `Still down: ${r.detail}\n`);
+        if (!r.up) return new Response(`Still down: ${r.detail}\n`);
+        return new Response(r.notified ? "Vetta works. Notification sent, monitor turned off.\n" : "Vetta works, but the notification failed. Monitor stays on and retries next hour.\n");
+      }
+      case "/test": {
+        const r = await notify(env, "Vetta monitor test", "Test notification. If you see this, ntfy is set up correctly.");
+        return new Response(r.ok ? "Test notification sent.\n" : `ntfy refused it: HTTP ${r.status} ${await r.text()}\n`);
       }
       case "/status": {
         const log = JSON.parse((await env.KV.get("log")) || "[]").reverse();
@@ -111,7 +129,7 @@ export default {
         return new Response(`Monitor is ${(await isOn(env)) ? "ON" : "OFF"}\n\n${lines.join("\n") || "no checks yet"}\n`);
       }
       default:
-        return new Response("Use /on, /off, /status or /check\n", { status: 404 });
+        return new Response("Use /on, /off, /status, /check or /test\n", { status: 404 });
     }
   },
 };
