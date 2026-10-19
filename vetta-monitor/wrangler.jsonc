@@ -1,0 +1,12 @@
+{
+  "name": "vetta-monitor",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  // Runs at the top of every hour (UTC)
+  "triggers": { "crons": ["0 * * * *"] },
+  "kv_namespaces": [{ "binding": "KV", "id": "ff717ce3b9c1489a95c30392f037f510" }]
+  // Secrets (set with `npx wrangler secret put <NAME>`):
+  //   VETTA_KEY    - your Vetta API key
+  //   NTFY_TOPIC   - the ntfy topic your phone subscribes to
+  //   ADMIN_TOKEN  - password for the /log, /check, /pause and /resume links
+}
