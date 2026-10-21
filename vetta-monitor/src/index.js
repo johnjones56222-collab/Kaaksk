@@ -5,15 +5,25 @@
 const CHAT_URL = "https://api.vetta.sh/v1/proxy/openai/v1/chat/completions";
 const MAX_LOG = 1000; // ~6 weeks of hourly entries
 
+// Small requests to cheap models keep working while Vetta is degraded, so the
+// check uses a strong model with a realistic-size prompt (~8k tokens). Failed
+// requests are free; a success costs about $0.02.
+const CHECK_MODEL = "anthropic/claude-sonnet-5.5";
+const CHECK_FILLER = Array.from({ length: 420 }, (_, i) =>
+  `Item ${i}: the quick brown fox jumps over the lazy dog near the riverbank.`).join(" ");
+
 async function checkVetta(env) {
   try {
     const res = await fetch(CHAT_URL, {
       method: "POST",
       headers: { authorization: `Bearer ${env.VETTA_KEY}`, "content-type": "application/json" },
       body: JSON.stringify({
-        model: "openai/gpt-oss-20b",
-        messages: [{ role: "user", content: "say ok" }],
-        max_tokens: 5,
+        model: CHECK_MODEL,
+        messages: [
+          { role: "system", content: `Reference notes:\n${CHECK_FILLER}` },
+          { role: "user", content: "Ignore the notes. Reply with just: ok" },
+        ],
+        max_tokens: 16,
       }),
     });
     let detail = `HTTP ${res.status}`;
@@ -70,16 +80,18 @@ async function runCheck(env) {
   return result;
 }
 
-// Live up/down for browsers. At most one real Vetta request per LIVE_TTL_MS,
-// so page loads can't flood Vetta. Doesn't touch on/off or send notifications.
-const LIVE_TTL_MS = 120_000;
+// Live up/down for browsers. Doesn't touch on/off or send notifications.
+// A successful check costs money, so an UP result is reused for 30 min;
+// a DOWN result (free) is re-checked after 2 min.
+const LIVE_TTL_UP_MS = 30 * 60_000;
+const LIVE_TTL_DOWN_MS = 2 * 60_000;
 let liveMemo = null;
 
 async function liveStatus(req, env) {
   const cors = { "access-control-allow-origin": "*", "content-type": "application/json" };
   if (req.method === "OPTIONS") return new Response(null, { headers: { ...cors, "access-control-allow-methods": "GET" } });
 
-  const fresh = (s) => s && Date.now() - Date.parse(s.checked_at) < LIVE_TTL_MS;
+  const fresh = (s) => s && Date.now() - Date.parse(s.checked_at) < (s.up ? LIVE_TTL_UP_MS : LIVE_TTL_DOWN_MS);
   let status = fresh(liveMemo) ? liveMemo : JSON.parse((await env.KV.get("live")) || "null");
   if (!fresh(status)) {
     const r = await checkVetta(env);
