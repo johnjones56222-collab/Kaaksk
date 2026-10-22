@@ -265,19 +265,32 @@ async function checkJobs(env) {
   }
 }
 
+// Lets a copy of the page saved on your device (standalone.html) call this server.
+const CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-headers": "x-vetta-key, x-filename, content-type",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+};
+const withCors = (res) => {
+  const out = new Response(res.body, res);
+  for (const [k, v] of Object.entries(CORS)) out.headers.set(k, v);
+  return out;
+};
+
 export default {
   async fetch(req, env, ctx) {
     NTFY_TOKEN = env.NTFY_TOKEN || "";
     const path = new URL(req.url).pathname;
+    if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
     if (path.startsWith("/api/")) {
       if (Date.now() - lastCheck > 20_000) ctx.waitUntil(checkJobs(env));
       try {
-        return await api(req, env, ctx, path);
+        return withCors(await api(req, env, ctx, path));
       } catch (err) {
-        return json({ error: err.message }, err.status || 500);
+        return withCors(json({ error: err.message }, err.status || 500));
       }
     }
-    if (path === "/api-config") return json({ ntfy_topic: env.NTFY_TOPIC || "" });
+    if (path === "/api-config") return withCors(json({ ntfy_topic: env.NTFY_TOPIC || "" }));
     return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } });
   },
 
