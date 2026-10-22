@@ -21,3 +21,6 @@ https://vetta-video-studio.johnjones56222.workers.dev
 
 Secret: `NTFY_TOKEN` (ntfy.sh account token; messages count against the account
 instead of the per-IP limit Workers share). Deploy with `npx wrangler deploy`.
+
+`standalone.html` is the same page as a single file you can open from your device;
+it calls the deployed server, which allows that via CORS.
