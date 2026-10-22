@@ -48,7 +48,7 @@
   .job .prompt { margin: 6px 0; overflow-wrap: anywhere; }
   .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
   .badge.completed { color: var(--ok); } .badge.failed, .badge.canceled, .badge.cancelled { color: var(--bad); }
-  .badge.queued, .badge.processing, .badge.running { color: var(--warn); }
+  .badge.queued, .badge.processing, .badge.running, .badge.starting, .badge.generating { color: var(--warn); }
   .job video { width: 100%; border-radius: 10px; margin-top: 8px; background: black; }
   .job a { color: var(--accent); }
   .empty { color: var(--muted); font-size: 14px; }
@@ -65,6 +65,9 @@
   .chip button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; padding: 0; border-radius: 50%; font-size: 13px; line-height: 1; }
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 8px; }
   .gallery a img { width: 100%; border-radius: 10px; display: block; background: #000; }
+  .gallery .ph { aspect-ratio: 1; border-radius: 10px; background: linear-gradient(90deg, var(--panel2), var(--line), var(--panel2)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .job .dismiss { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 13px; }
   .strength { display: flex; gap: 10px; align-items: center; }
   .strength input[type=range] { flex: 1; padding: 0; accent-color: var(--accent); }
 </style>
@@ -221,7 +224,7 @@
     </div>
     <div id="imageList" hidden>
       <h2>Your images</h2>
-      <div class="hint" style="margin:-6px 0 10px">Images made from this browser. Download links last about 7 days.</div>
+      <div class="hint" style="margin:-6px 0 10px">Your latest 30 images on this API key. Download links last about 7 days.</div>
       <div id="images" class="empty">No images yet.</div>
     </div>
   </section>
@@ -375,6 +378,9 @@ $("generate").addEventListener("click", async () => {
   const btn = $("generate");
   btn.disabled = true;
   btn.textContent = "Starting...";
+  const pend = { id: crypto.randomUUID(), at: Date.now(), model: $("model").value, prompt, seconds: $("seconds").value };
+  savePending(PENDING_VID, [pend, ...pendingList(PENDING_VID)]);
+  loadJobs();
   try {
     const job = await call("/api/generate", {
       method: "POST",
@@ -389,58 +395,101 @@ $("generate").addEventListener("click", async () => {
         image: refImage.value,
         video_url: refVideo.value,
         ntfy_topic: store.get("ntfy_topic"),
+        idempotency_key: pend.id,
       }),
     });
+    dropPending(PENDING_VID, pend.id);
     showMsg("Started " + job.id + ". " + (job.tracked ? "You'll get an ntfy notification when it's done." : "No ntfy topic set, so no notification."), "ok");
     loadJobs();
     loadBalance();
   } catch (e) {
-    showMsg(e.message, "err");
+    // Same for videos: after a network error the job may still have started.
+    if (e instanceof TypeError) {
+      showMsg("Lost the connection. If the video started, it will show up on the right.", "ok");
+    } else {
+      dropPending(PENDING_VID, pend.id);
+      showMsg(e.message, "err");
+    }
+    loadJobs();
   } finally {
     btn.disabled = false;
     btn.textContent = "Generate video";
   }
 });
 
+// Requests still waiting on Vetta are saved in localStorage, so a reload shows
+// them as starting/generating until their result appears in the account.
+const PENDING_VID = "pending_videos", PENDING_IMG = "pending_images";
+function pendingList(k) { try { return JSON.parse(store.get(k) || "[]"); } catch { return []; } }
+function savePending(k, list) { store.set(k, JSON.stringify(list)); }
+function dropPending(k, id) { savePending(k, pendingList(k).filter((p) => p.id !== id)); }
+// A result belongs to a pending request if it has the same prompt and is newer
+// than the request (with a minute of slack for clock differences).
+const matches = (p, prompt, created) => prompt === p.prompt && Date.parse(created) > p.at - 60_000;
+const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? s + "s" : Math.floor(s / 60) + "m " + (s % 60) + "s"; };
+
+function entry({ meta, status, label, prompt, error, onDismiss }) {
+  const el = document.createElement("div");
+  el.className = "job";
+  const top = document.createElement("div");
+  top.className = "top";
+  const left = document.createElement("span");
+  left.textContent = meta;
+  const badge = document.createElement("span");
+  badge.className = "badge " + status;
+  badge.textContent = label || status;
+  top.append(left, badge);
+  const p = document.createElement("div");
+  p.className = "prompt";
+  p.textContent = prompt || "";
+  el.append(top, p);
+  if (error) { const e = document.createElement("div"); e.className = "hint"; e.textContent = error; el.append(e); }
+  if (onDismiss) { const d = document.createElement("button"); d.className = "dismiss"; d.textContent = "Dismiss"; d.onclick = onDismiss; el.append(d); }
+  return el;
+}
+
 async function loadJobs() {
   const box = $("jobs");
   if (!store.get("vetta_key")) return;
-  try {
-    const jobs = await call("/api/jobs");
-    if (!jobs.length) { box.className = "empty"; box.textContent = "No videos yet."; return; }
-    box.className = "";
-    box.innerHTML = "";
-    for (const j of jobs) {
-      const el = document.createElement("div");
-      el.className = "job";
-      const top = document.createElement("div");
-      top.className = "top";
-      const left = document.createElement("span");
-      left.textContent = new Date(j.created_at).toLocaleString() + " · " + j.model + (j.seconds ? " · " + j.seconds + "s" : "") + (j.cost_usd != null ? " · $" + j.cost_usd.toFixed(2) : "");
-      const badge = document.createElement("span");
-      badge.className = "badge " + j.status;
-      badge.textContent = j.status;
-      top.append(left, badge);
-      const p = document.createElement("div");
-      p.className = "prompt";
-      p.textContent = j.prompt || "";
-      el.append(top, p);
-      if (j.error) { const e = document.createElement("div"); e.className = "hint"; e.textContent = j.error; el.append(e); }
-      if (j.url) {
-        const v = document.createElement("video");
-        v.src = j.url; v.controls = true; v.preload = "metadata";
-        const a = document.createElement("a");
-        a.href = j.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Download";
-        el.append(v, a);
-      }
-      box.append(el);
-    }
-    const pending = jobs.some((j) => ["queued", "processing", "running", "pending"].includes(j.status));
-    clearTimeout(pollTimer);
-    if (pending) pollTimer = setTimeout(loadJobs, 20000);
-  } catch (e) { box.className = "empty"; box.textContent = "Could not load videos: " + e.message; }
-}
+  clearTimeout(pollTimer);
+  let jobs;
+  try { jobs = await call("/api/jobs"); }
+  catch (e) { box.className = "empty"; box.textContent = "Could not load videos: " + e.message; pollTimer = setTimeout(loadJobs, 20000); return; }
 
+  // Started requests whose job now exists are done; give up on ones Vetta never confirmed.
+  const pend = pendingList(PENDING_VID)
+    .filter((p) => !jobs.some((j) => matches(p, j.prompt, j.created_at)))
+    .map((p) => (!p.failed && Date.now() - p.at > 3 * 60_000 ? { ...p, failed: "Vetta never confirmed this video, so it probably did not start. Try again." } : p));
+  savePending(PENDING_VID, pend);
+
+  if (!jobs.length && !pend.length) { box.className = "empty"; box.textContent = "No videos yet."; return; }
+  box.className = "";
+  box.innerHTML = "";
+  for (const p of pend) {
+    box.append(entry({
+      meta: new Date(p.at).toLocaleString() + " · " + p.model + (p.seconds ? " · " + p.seconds + "s" : ""),
+      status: p.failed ? "failed" : "starting", prompt: p.prompt, error: p.failed,
+      onDismiss: p.failed ? () => { dropPending(PENDING_VID, p.id); loadJobs(); } : null,
+    }));
+  }
+  for (const j of jobs) {
+    const el = entry({
+      meta: new Date(j.created_at).toLocaleString() + " · " + j.model + (j.seconds ? " · " + j.seconds + "s" : "") + (j.cost_usd != null ? " · $" + j.cost_usd.toFixed(2) : ""),
+      status: j.status, prompt: j.prompt, error: j.error,
+    });
+    if (j.url) {
+      const v = document.createElement("video");
+      v.src = j.url; v.controls = true; v.preload = "metadata";
+      const a = document.createElement("a");
+      a.href = j.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Download";
+      el.append(v, a);
+    }
+    box.append(el);
+  }
+  const starting = pend.some((p) => !p.failed);
+  const pending = jobs.some((j) => ["queued", "processing", "running", "pending"].includes(j.status));
+  if (starting || pending) pollTimer = setTimeout(loadJobs, starting ? 5000 : 20000);
+}
 
 // ---- Image generation ----
 let imgModels = [];
@@ -519,28 +568,58 @@ $("imgStrength").addEventListener("input", (e) => ($("imgStrengthVal").textConte
 $("imgModel").addEventListener("change", () => { store.set("last_img_model", $("imgModel").value); showImgModelDesc(); });
 $("refreshImgModels").addEventListener("click", loadImgModels);
 
-function imageHistory() { try { return JSON.parse(store.get("image_history") || "[]"); } catch { return []; } }
-function renderImages() {
+let imgTimer = null;
+async function loadImages() {
   const box = $("images");
-  const hist = imageHistory().filter((h) => Date.now() - h.at < 7 * 864e5);
-  if (!hist.length) { box.className = "empty"; box.textContent = "No images yet."; return; }
+  if (!store.get("vetta_key")) return;
+  clearTimeout(imgTimer);
+  let files = null, err = "";
+  try { files = await call("/api/images"); } catch (e) { err = e.message; }
+
+  let pend = pendingList(PENDING_IMG);
+  if (files) {
+    pend = pend
+      .filter((p) => p.failed || !files.some((f) => matches(p, f.prompt, f.created_at)))
+      .map((p) => (!p.failed && Date.now() - p.at > 10 * 60_000 ? { ...p, failed: "No image showed up after 10 minutes." } : p));
+    savePending(PENDING_IMG, pend);
+  }
+
+  // Files from one request share a prompt and land within seconds of each other.
+  const groups = [];
+  for (const f of files || []) {
+    const g = groups[groups.length - 1];
+    if (g && g.prompt === f.prompt && g.model === f.model && Math.abs(Date.parse(g.files.at(-1).created_at) - Date.parse(f.created_at)) < 20_000) g.files.push(f);
+    else groups.push({ prompt: f.prompt, model: f.model, files: [f] });
+  }
+
+  if (!pend.length && !groups.length) { box.className = "empty"; box.textContent = err ? "Could not load images: " + err : "No images yet."; return; }
   box.className = ""; box.innerHTML = "";
-  for (const h of hist) {
-    const el = document.createElement("div"); el.className = "job";
-    const top = document.createElement("div"); top.className = "top";
-    const left = document.createElement("span");
-    left.textContent = new Date(h.at).toLocaleString() + " · " + h.model + (h.cost != null ? " · $" + h.cost.toFixed(3) : "");
-    const badge = document.createElement("span"); badge.className = "badge completed"; badge.textContent = "completed";
-    top.append(left, badge);
-    const p = document.createElement("div"); p.className = "prompt"; p.textContent = h.prompt;
+  if (err) { const e = document.createElement("div"); e.className = "hint"; e.textContent = "Could not load images: " + err; box.append(e); }
+  for (const p of pend) {
+    const el = entry({
+      meta: new Date(p.at).toLocaleString() + " · " + p.model + (p.failed ? "" : " · " + ago(p.at)),
+      status: p.failed ? "failed" : "generating", prompt: p.prompt, error: p.failed,
+      onDismiss: p.failed ? () => { dropPending(PENDING_IMG, p.id); loadImages(); } : null,
+    });
+    if (!p.failed) {
+      const g = document.createElement("div"); g.className = "gallery";
+      for (let i = 0; i < (Number(p.n) || 1); i++) { const ph = document.createElement("div"); ph.className = "ph"; g.append(ph); }
+      el.append(g);
+    }
+    box.append(el);
+  }
+  for (const grp of groups) {
+    const el = entry({ meta: new Date(grp.files[0].created_at).toLocaleString() + " · " + (grp.model || "image"), status: "completed", prompt: grp.prompt });
     const g = document.createElement("div"); g.className = "gallery";
-    for (const u of h.urls) {
-      const a = document.createElement("a"); a.href = u; a.target = "_blank"; a.rel = "noopener";
-      const img = document.createElement("img"); img.src = u; img.loading = "lazy"; img.alt = h.prompt;
+    for (const f of grp.files) {
+      if (!f.url) continue;
+      const a = document.createElement("a"); a.href = f.url; a.target = "_blank"; a.rel = "noopener";
+      const img = document.createElement("img"); img.src = f.url; img.loading = "lazy"; img.alt = grp.prompt;
       a.append(img); g.append(a);
     }
-    el.append(top, p, g); box.append(el);
+    el.append(g); box.append(el);
   }
+  if (pend.some((p) => !p.failed)) imgTimer = setTimeout(loadImages, 5000);
 }
 
 $("generateImage").addEventListener("click", async () => {
@@ -550,7 +629,10 @@ $("generateImage").addEventListener("click", async () => {
   if (!prompt) return showImgMsg("Write a prompt first.", "err");
   const btn = $("generateImage");
   btn.disabled = true; btn.textContent = "Generating... (can take a minute)";
-  showImgMsg("Generating...", "ok");
+  showImgMsg("Generating... You can reload or close this page; it keeps going.", "ok");
+  const pend = { id: crypto.randomUUID(), at: Date.now(), model: $("imgModel").value, prompt, n: $("imgN").value };
+  savePending(PENDING_IMG, [pend, ...pendingList(PENDING_IMG)]);
+  loadImages();
   try {
     const r = await call("/api/generate-image", {
       method: "POST",
@@ -559,17 +641,23 @@ $("generateImage").addEventListener("click", async () => {
         model: $("imgModel").value, prompt,
         n: $("imgN").value, aspect_ratio: $("imgAspect").value, seed: $("imgSeed").value,
         style: $("imgStyle").value, character: $("imgCharacter").value, character_strength: $("imgStrength").value,
-        images: imgRefs.map((x) => x.value), ntfy_topic: store.get("ntfy_topic"),
+        images: imgRefs.map((x) => x.value), ntfy_topic: store.get("ntfy_topic"), idempotency_key: pend.id,
       }),
     });
-    const hist = imageHistory();
-    hist.unshift({ at: Date.now(), model: r.model, prompt, cost: r.cost_usd, urls: r.files.map((f) => f.url) });
-    store.set("image_history", JSON.stringify(hist.slice(0, 50)));
-    renderImages();
+    dropPending(PENDING_IMG, pend.id);
+    loadImages();
     showImgMsg("Done: " + r.files.length + " image" + (r.files.length === 1 ? "" : "s") + (r.cost_usd != null ? " for $" + r.cost_usd.toFixed(3) : "") + ".", "ok");
     loadBalance();
   } catch (e) {
-    showImgMsg(e.message, "err");
+    // A network error (which is also what reloading this page causes) doesn't stop
+    // the render, so the entry stays "generating" until the image shows up.
+    if (e instanceof TypeError) {
+      showImgMsg("Lost the connection, but the image is still being made. It will show up on the right.", "ok");
+    } else {
+      savePending(PENDING_IMG, pendingList(PENDING_IMG).map((p) => (p.id === pend.id ? { ...p, failed: e.message } : p)));
+      showImgMsg(e.message, "err");
+    }
+    loadImages();
   } finally {
     btn.disabled = false; btn.textContent = "Generate image";
   }
@@ -611,7 +699,7 @@ async function init() {
   if (!store.get("vetta_key")) { openSettings(); return; }
   setTab(store.get("tab") === "image" ? "image" : "video");
   loadBalance(); loadModels(); loadCharacters(); loadJobs();
-  loadImgModels(); loadStyles(); renderImages();
+  loadImgModels(); loadStyles(); loadImages();
 }
 init();
 </script>

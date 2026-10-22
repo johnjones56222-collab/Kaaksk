@@ -4,7 +4,9 @@
 // `x-vetta-key`. Every started video is tracked in KV and checked each minute
 // by the cron trigger, which sends an ntfy notification when it completes or
 // fails, even if the page is closed. Images render synchronously, so their
-// notification is sent as soon as the request settles.
+// notification is sent as soon as the request settles (see generateImage for
+// what happens if the page is reloaded first). The image gallery is read from
+// the account's Vetta Files, so it survives reloads and works on any device.
 
 import PAGE from "./page.html";
 
@@ -42,6 +44,15 @@ const json = (data, status = 200) => Response.json(data, { status });
 
 async function mintUrl(key, fileId) {
   return (await vetta(key, "POST", `/files/${fileId}/url`)).url;
+}
+
+// Signed links last about 7 days; reuse them for 6 so a gallery load stays cheap.
+async function cachedUrl(env, key, fileId) {
+  const hit = await env.KV.get(`url:${fileId}`);
+  if (hit) return hit;
+  const url = await mintUrl(key, fileId);
+  await env.KV.put(`url:${fileId}`, url, { expirationTtl: 6 * 86400 });
+  return url;
 }
 
 // ntfy.sh rate-limits per IP and Workers share IPs, so messages are sent with
@@ -89,6 +100,75 @@ async function listAll(key, path) {
 
 const DEFAULT_STYLES = ["Phone snap", "Realistic", "Everyday", "Library", "Quiet luxury", "Through the glass", "Flight mode",
   "Selfcare", "Japandi", "Foggy morning", "Rainy day", "90s editorial", "Wide-angle outfit", "Elevator mirror", "Escalator", "Tokyo street style"];
+
+async function startVideo(env, key, b) {
+  const job = await vetta(key, "POST", "/media/videos", {
+    json: strip({
+      model: b.model,
+      prompt: b.prompt,
+      seconds: b.seconds ? Number(b.seconds) : undefined,
+      aspect_ratio: b.aspect_ratio,
+      seed: b.seed !== "" && b.seed != null ? Number(b.seed) : undefined,
+      character: b.character,
+      image_urls: b.image ? [b.image] : undefined,
+      video_url: b.video_url,
+    }),
+    headers: { "idempotency-key": /^[\w-]{8,100}$/.test(b.idempotency_key || "") ? b.idempotency_key : crypto.randomUUID() },
+  });
+  const topic = (b.ntfy_topic || env.NTFY_TOPIC || "").trim();
+  if (topic) {
+    await env.KV.put(`job:${job.id}`, JSON.stringify({
+      key, topic, model: job.model, prompt: b.prompt, created: Date.now(), notify_attempts: 0,
+    }));
+  }
+  return { id: job.id, status: job.status, model: job.model, tracked: Boolean(topic) };
+}
+
+// Vetta keeps rendering when the caller hangs up, and a repeat request with the
+// same idempotency key returns the finished result instead of a new image. So
+// while a request runs, img:<key> is kept in KV; if this Worker gets cut off
+// (e.g. the page was reloaded), checkJobs replays it later to send the ntfy.
+async function generateImage(env, ctx, key, b) {
+  const topic = (b.ntfy_topic || env.NTFY_TOPIC || "").trim();
+  const what = `${b.model}\n"${(b.prompt || "").slice(0, 140)}"`;
+  const ik = /^[\w-]{8,100}$/.test(b.idempotency_key || "") ? b.idempotency_key : crypto.randomUUID();
+  const rec = `img:${ik}`;
+  if (topic && !b.replay) {
+    await env.KV.put(rec, JSON.stringify({ key, b: { ...b, idempotency_key: ik }, started: Date.now() }), { expirationTtl: 2 * 3600 });
+  }
+  try {
+    const res = await vetta(key, "POST", "/media/images", {
+      json: strip({
+        model: b.model,
+        prompt: b.prompt,
+        n: b.n ? Number(b.n) : undefined,
+        aspect_ratio: b.aspect_ratio,
+        seed: b.seed !== "" && b.seed != null ? Number(b.seed) : undefined,
+        character: b.character,
+        character_strength: b.character && b.character_strength ? Number(b.character_strength) : undefined,
+        style: b.style,
+        image_urls: b.images?.length ? b.images.slice(0, 4) : undefined,
+      }),
+      headers: { "idempotency-key": ik },
+    });
+    const files = await Promise.all((res.files || []).map(async (f) => ({ file_id: f.id, url: await cachedUrl(env, key, f.id), width: f.width, height: f.height })));
+    const cost = res.cost_micro_usd != null ? res.cost_micro_usd / 1e6 : null;
+    if (topic) {
+      const msg = `${what}\n${files.length} image${files.length === 1 ? "" : "s"}${cost != null ? ` · $${cost.toFixed(3)}` : ""}`;
+      ctx.waitUntil(notifyOrQueue(env, { topic, title: "Image ready", message: msg, tags: "white_check_mark,frame_with_picture", click: files[0]?.url, attach: files[0]?.url, label: "Open image" }));
+    }
+    if (topic) await env.KV.delete(rec);
+    return { model: res.model, cost_usd: cost, files };
+  } catch (err) {
+    // 409: the original request is still rendering; let it (or a later replay) finish.
+    if (b.replay && err.status === 409) throw err;
+    if (topic) {
+      ctx.waitUntil(notifyOrQueue(env, { topic, title: "Image failed", message: `${what}\n${err.message}`, tags: "x" }));
+      await env.KV.delete(rec);
+    }
+    throw err;
+  }
+}
 
 async function api(req, env, ctx, path) {
   const key = (req.headers.get("x-vetta-key") || "").trim();
@@ -142,58 +222,31 @@ async function api(req, env, ctx, path) {
 
   if (path === "/api/generate" && req.method === "POST") {
     const b = await req.json();
-    const job = await vetta(key, "POST", "/media/videos", {
-      json: strip({
-        model: b.model,
-        prompt: b.prompt,
-        seconds: b.seconds ? Number(b.seconds) : undefined,
-        aspect_ratio: b.aspect_ratio,
-        seed: b.seed !== "" && b.seed != null ? Number(b.seed) : undefined,
-        character: b.character,
-        image_urls: b.image ? [b.image] : undefined,
-        video_url: b.video_url,
-      }),
-      headers: { "idempotency-key": crypto.randomUUID() },
-    });
-    const topic = (b.ntfy_topic || env.NTFY_TOPIC || "").trim();
-    if (topic) {
-      await env.KV.put(`job:${job.id}`, JSON.stringify({
-        key, topic, model: job.model, prompt: b.prompt, created: Date.now(), notify_attempts: 0,
-      }));
-    }
-    return json({ id: job.id, status: job.status, model: job.model, tracked: Boolean(topic) });
+    const work = startVideo(env, key, b);
+    ctx.waitUntil(work.catch(() => {}));
+    return json(await work);
   }
 
   if (path === "/api/generate-image" && req.method === "POST") {
+    // waitUntil keeps the Vetta call (and its notification) alive even if the
+    // page is reloaded while the image is still rendering.
     const b = await req.json();
-    const topic = (b.ntfy_topic || env.NTFY_TOPIC || "").trim();
-    const what = `${b.model}\n"${(b.prompt || "").slice(0, 140)}"`;
-    try {
-      const res = await vetta(key, "POST", "/media/images", {
-        json: strip({
-          model: b.model,
-          prompt: b.prompt,
-          n: b.n ? Number(b.n) : undefined,
-          aspect_ratio: b.aspect_ratio,
-          seed: b.seed !== "" && b.seed != null ? Number(b.seed) : undefined,
-          character: b.character,
-          character_strength: b.character && b.character_strength ? Number(b.character_strength) : undefined,
-          style: b.style,
-          image_urls: b.images?.length ? b.images.slice(0, 4) : undefined,
-        }),
-        headers: { "idempotency-key": crypto.randomUUID() },
-      });
-      const files = await Promise.all((res.files || []).map(async (f) => ({ file_id: f.id, url: await mintUrl(key, f.id), width: f.width, height: f.height })));
-      const cost = res.cost_micro_usd != null ? res.cost_micro_usd / 1e6 : null;
-      if (topic) {
-        const msg = `${what}\n${files.length} image${files.length === 1 ? "" : "s"}${cost != null ? ` · $${cost.toFixed(3)}` : ""}`;
-        ctx.waitUntil(notifyOrQueue(env, { topic, title: "Image ready", message: msg, tags: "white_check_mark,frame_with_picture", click: files[0]?.url, attach: files[0]?.url, label: "Open image" }));
-      }
-      return json({ model: res.model, cost_usd: cost, files });
-    } catch (err) {
-      if (topic) ctx.waitUntil(notifyOrQueue(env, { topic, title: "Image failed", message: `${what}\n${err.message}`, tags: "x" }));
-      throw err;
-    }
+    const work = generateImage(env, ctx, key, b);
+    ctx.waitUntil(work.catch(() => {}));
+    return json(await work);
+  }
+
+  // Images generated with this key, newest first, from Vetta Files.
+  if (path === "/api/images") {
+    const page = await vetta(key, "GET", "/files?kind=image&source=image_generation&limit=30");
+    const files = await Promise.all(page.data.map(async (f) => ({
+      file_id: f.id,
+      model: f.source?.model || null,
+      prompt: f.source?.prompt || "",
+      created_at: f.created_at,
+      url: await cachedUrl(env, key, f.id).catch(() => null),
+    })));
+    return json(files);
   }
 
   if (path === "/api/jobs") {
@@ -232,6 +285,20 @@ async function checkJobs(env) {
     const ok = await notify(n.topic, n.title, n.message, n.tags, n.click, { attach: n.attach, label: n.label });
     if (ok || n.attempts >= MAX_NOTIFY_ATTEMPTS) await env.KV.delete(name);
     else await env.KV.put(name, JSON.stringify({ ...n, attempts: n.attempts + 1 }));
+  }
+
+  const imgs = await env.KV.list({ prefix: "img:" });
+  for (const { name } of imgs.keys.slice(0, 3)) {
+    const r = JSON.parse((await env.KV.get(name)) || "null");
+    if (!r || Date.now() - r.started < 3 * 60_000) continue; // probably still being handled live
+    const later = [];
+    try {
+      await generateImage(env, { waitUntil: (p) => later.push(p) }, r.key, { ...r.b, replay: true });
+    } catch (err) {
+      if (err.status === 409 && Date.now() - r.started < 60 * 60_000) continue;
+      await env.KV.delete(name); // failure was already reported by generateImage
+    }
+    await Promise.all(later);
   }
 
   const { keys } = await env.KV.list({ prefix: "job:" });

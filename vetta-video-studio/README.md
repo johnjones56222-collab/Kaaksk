@@ -13,6 +13,13 @@ https://vetta-video-studio.johnjones56222.workers.dev
   reference images. Images render right away and send ntfy "Image ready"
   (with the picture) or "Image failed". Refused notifications are queued in
   KV (`note:`) and retried.
+- Reloading never loses work. The image list is read from the account's Vetta
+  Files (`/api/images`), and the video list from its media jobs. A request
+  still running is saved in the browser and shown as "generating"/"starting"
+  until its result appears. Vetta keeps rendering an image after the caller
+  hangs up, and the page sends its own idempotency key. If the Worker is cut
+  off, an `img:` record in KV lets the cron replay the request (same key, no
+  second image) to send the ntfy.
 - Each started video is stored in KV with the key and topic; a cron trigger
   checks it every minute and sends ntfy "Video ready" (with an Open video
   button) or "Video failed", even if the page is closed. The record is deleted
