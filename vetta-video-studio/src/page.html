@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vetta Video Studio</title>
+<title>Vetta Studio</title>
 <style>
   :root {
     --bg: #0b0d12; --panel: #141821; --panel2: #1b2030; --line: #262c3d;
@@ -56,11 +56,22 @@
   dialog::backdrop { background: rgba(0,0,0,.6); }
   .keyline { display: flex; gap: 8px; }
   .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+  .tabs { display: flex; gap: 6px; background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; padding: 4px; margin-bottom: 16px; }
+  .tabs button { flex: 1; border: 0; background: transparent; color: var(--muted); font-weight: 600; }
+  .tabs button.on { background: var(--accent); color: white; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .chip { position: relative; }
+  .chip img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; }
+  .chip button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; padding: 0; border-radius: 50%; font-size: 13px; line-height: 1; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 8px; }
+  .gallery a img { width: 100%; border-radius: 10px; display: block; background: #000; }
+  .strength { display: flex; gap: 10px; align-items: center; }
+  .strength input[type=range] { flex: 1; padding: 0; accent-color: var(--accent); }
 </style>
 </head>
 <body>
 <header>
-  <h1>Vetta Video Studio</h1>
+  <h1>Vetta Studio</h1>
   <div style="display:flex;gap:10px;align-items:center">
     <span class="pill" id="balance">no key</span>
     <button class="iconbtn" id="openSettings" title="Settings">Settings</button>
@@ -69,6 +80,8 @@
 
 <main>
   <section>
+    <div class="tabs"><button data-tab="video" class="on">Video</button><button data-tab="image">Image</button></div>
+    <div id="videoForm">
     <h2>New video</h2>
 
     <label for="model">Model</label>
@@ -130,14 +143,87 @@
 
     <button class="primary" id="generate">Generate video</button>
     <div class="msg" id="msg"></div>
+    </div>
+
+    <div id="imageForm" hidden>
+    <h2>New image</h2>
+
+    <label for="imgModel">Model</label>
+    <div style="display:flex;gap:8px">
+      <select id="imgModel"><option>Loading models...</option></select>
+      <button class="iconbtn" id="refreshImgModels" title="Reload models">Reload</button>
+    </div>
+    <div class="hint" id="imgModelDesc"></div>
+
+    <label for="imgPrompt">Prompt</label>
+    <textarea id="imgPrompt" placeholder="Describe the image."></textarea>
+
+    <div class="row">
+      <div>
+        <label for="imgN">Number of images</label>
+        <select id="imgN"><option>1</option><option>2</option><option>3</option><option>4</option></select>
+      </div>
+      <div>
+        <label for="imgAspect">Aspect ratio</label>
+        <select id="imgAspect">
+          <option value="">Model default</option>
+          <option>1:1</option><option>16:9</option><option>9:16</option><option>4:3</option>
+          <option>3:4</option><option>3:2</option><option>2:3</option><option>21:9</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="imgStyle">Style (optional)</label>
+        <select id="imgStyle"><option value="">None</option></select>
+      </div>
+      <div>
+        <label for="imgSeed">Seed (optional)</label>
+        <input type="number" id="imgSeed" placeholder="random">
+      </div>
+    </div>
+
+    <label for="imgCharacter">Character (optional)</label>
+    <select id="imgCharacter"><option value="">None</option></select>
+    <div id="strengthBox" hidden>
+      <label>Character strength</label>
+      <div class="strength">
+        <input type="range" id="imgStrength" min="0.5" max="1" step="0.05" value="0.8">
+        <span id="imgStrengthVal">0.80</span>
+      </div>
+    </div>
+
+    <label>Reference images (up to 4)</label>
+    <div class="ref">
+      <div class="line">
+        <input type="url" id="imgRefUrl" placeholder="Paste an image link">
+        <button class="iconbtn" id="imgRefAdd">Add</button>
+        <button class="iconbtn" id="imgRefPick">Upload</button>
+        <input type="file" id="imgRefFile" accept="image/*" multiple hidden>
+      </div>
+      <div class="status" id="imgRefStatus"></div>
+      <div class="chips" id="imgRefChips"></div>
+    </div>
+
+    <button class="primary" id="generateImage">Generate image</button>
+    <div class="msg" id="imgMsg"></div>
+    </div>
   </section>
 
   <section>
+    <div id="videoList">
     <h2 style="display:flex;justify-content:space-between;align-items:center">
       <span>Your videos</span>
       <button class="iconbtn" id="refreshJobs" style="text-transform:none;letter-spacing:0">Refresh</button>
     </h2>
     <div id="jobs" class="empty">Add your API key in Settings to see your videos.</div>
+    </div>
+    <div id="imageList" hidden>
+      <h2>Your images</h2>
+      <div class="hint" style="margin:-6px 0 10px">Images made from this browser. Download links last about 7 days.</div>
+      <div id="images" class="empty">No images yet.</div>
+    </div>
   </section>
 </main>
 
@@ -151,7 +237,7 @@
   <div class="hint">Saved only in this browser. It is sent with each request so the server can call Vetta for you.</div>
   <label for="topic">ntfy topic for notifications</label>
   <input type="text" id="topic" placeholder="your-ntfy-topic">
-  <div class="hint">You get "Video ready" or "Video failed" here, even if this page is closed. Leave empty for no notifications.</div>
+  <div class="hint">You get "ready" or "failed" for every video and image here, even if this page is closed. Leave empty for no notifications.</div>
   <div class="actions">
     <button id="cancelSettings">Cancel</button>
     <button class="primary" style="width:auto;margin:0" id="saveSettings">Save</button>
@@ -219,13 +305,14 @@ async function loadCharacters() {
   if (!store.get("vetta_key")) return;
   try {
     const chars = await call("/api/characters");
-    const sel = $("character");
-    sel.innerHTML = '<option value="">None</option>';
-    for (const c of chars) {
-      const o = document.createElement("option");
-      o.value = c.name || c.id;
-      o.textContent = (c.name || c.id) + (c.scope === "platform" ? " (prebuilt)" : "");
-      sel.appendChild(o);
+    for (const sel of [$("character"), $("imgCharacter")]) {
+      sel.innerHTML = '<option value="">None</option>';
+      for (const c of chars) {
+        const o = document.createElement("option");
+        o.value = c.name || c.id;
+        o.textContent = (c.name || c.id) + (c.scope === "platform" ? " (prebuilt)" : "");
+        sel.appendChild(o);
+      }
     }
   } catch {}
 }
@@ -354,6 +441,149 @@ async function loadJobs() {
   } catch (e) { box.className = "empty"; box.textContent = "Could not load videos: " + e.message; }
 }
 
+
+// ---- Image generation ----
+let imgModels = [];
+const imgRefs = []; // { value, preview }
+
+function showImgMsg(text, kind) { const m = $("imgMsg"); m.className = "msg " + kind; m.textContent = text; }
+
+async function loadImgModels() {
+  const sel = $("imgModel");
+  if (!store.get("vetta_key")) { sel.innerHTML = "<option>Add your API key first</option>"; return; }
+  sel.innerHTML = "<option>Loading models...</option>";
+  try {
+    imgModels = await call("/api/models?kind=image");
+    const last = store.get("last_img_model");
+    sel.innerHTML = "";
+    for (const m of imgModels) {
+      const o = document.createElement("option");
+      o.value = m.id; o.textContent = m.name || m.id;
+      sel.appendChild(o);
+    }
+    if (imgModels.some((m) => m.id === last)) sel.value = last;
+    else if (imgModels.some((m) => m.id === "openai/gpt-image-2.5-sunburst")) sel.value = "openai/gpt-image-2.5-sunburst";
+    showImgModelDesc();
+  } catch (e) { sel.innerHTML = "<option>Could not load models</option>"; showImgMsg(e.message, "err"); }
+}
+function showImgModelDesc() {
+  const m = imgModels.find((x) => x.id === $("imgModel").value);
+  $("imgModelDesc").textContent = m ? m.id + (m.description ? " · " + m.description : "") : "";
+}
+async function loadStyles() {
+  if (!store.get("vetta_key")) return;
+  try {
+    const styles = await call("/api/styles");
+    const sel = $("imgStyle");
+    sel.innerHTML = '<option value="">None</option>';
+    for (const s of styles) { const o = document.createElement("option"); o.value = o.textContent = s; sel.appendChild(o); }
+  } catch {}
+}
+
+function renderRefs() {
+  const box = $("imgRefChips");
+  box.innerHTML = "";
+  imgRefs.forEach((r, i) => {
+    const chip = document.createElement("div"); chip.className = "chip";
+    const img = document.createElement("img"); img.src = r.preview; img.alt = "";
+    const x = document.createElement("button"); x.textContent = "×"; x.title = "Remove";
+    x.onclick = () => { imgRefs.splice(i, 1); renderRefs(); };
+    chip.append(img, x); box.append(chip);
+  });
+  $("imgRefStatus").textContent = imgRefs.length ? imgRefs.length + " of 4 reference images" : "";
+}
+$("imgRefAdd").addEventListener("click", () => {
+  const u = $("imgRefUrl").value.trim();
+  if (!u) return;
+  if (imgRefs.length >= 4) return showImgMsg("Up to 4 reference images.", "err");
+  imgRefs.push({ value: u, preview: u }); $("imgRefUrl").value = ""; renderRefs();
+});
+$("imgRefPick").addEventListener("click", () => $("imgRefFile").click());
+let imgUploading = 0;
+$("imgRefFile").addEventListener("change", async () => {
+  const files = [...$("imgRefFile").files].slice(0, 4 - imgRefs.length);
+  $("imgRefFile").value = "";
+  for (const f of files) {
+    imgUploading++;
+    $("imgRefStatus").textContent = "Uploading " + f.name + "...";
+    try {
+      const r = await call("/api/upload", { method: "POST", body: f, headers: { "content-type": f.type || "application/octet-stream", "x-filename": encodeURIComponent(f.name) } });
+      imgRefs.push({ value: r.file_id, preview: r.url });
+    } catch (e) { showImgMsg("Upload failed: " + e.message, "err"); }
+    finally { imgUploading--; renderRefs(); }
+  }
+});
+
+$("imgCharacter").addEventListener("change", () => { $("strengthBox").hidden = !$("imgCharacter").value; });
+$("imgStrength").addEventListener("input", (e) => ($("imgStrengthVal").textContent = Number(e.target.value).toFixed(2)));
+$("imgModel").addEventListener("change", () => { store.set("last_img_model", $("imgModel").value); showImgModelDesc(); });
+$("refreshImgModels").addEventListener("click", loadImgModels);
+
+function imageHistory() { try { return JSON.parse(store.get("image_history") || "[]"); } catch { return []; } }
+function renderImages() {
+  const box = $("images");
+  const hist = imageHistory().filter((h) => Date.now() - h.at < 7 * 864e5);
+  if (!hist.length) { box.className = "empty"; box.textContent = "No images yet."; return; }
+  box.className = ""; box.innerHTML = "";
+  for (const h of hist) {
+    const el = document.createElement("div"); el.className = "job";
+    const top = document.createElement("div"); top.className = "top";
+    const left = document.createElement("span");
+    left.textContent = new Date(h.at).toLocaleString() + " · " + h.model + (h.cost != null ? " · $" + h.cost.toFixed(3) : "");
+    const badge = document.createElement("span"); badge.className = "badge completed"; badge.textContent = "completed";
+    top.append(left, badge);
+    const p = document.createElement("div"); p.className = "prompt"; p.textContent = h.prompt;
+    const g = document.createElement("div"); g.className = "gallery";
+    for (const u of h.urls) {
+      const a = document.createElement("a"); a.href = u; a.target = "_blank"; a.rel = "noopener";
+      const img = document.createElement("img"); img.src = u; img.loading = "lazy"; img.alt = h.prompt;
+      a.append(img); g.append(a);
+    }
+    el.append(top, p, g); box.append(el);
+  }
+}
+
+$("generateImage").addEventListener("click", async () => {
+  if (!store.get("vetta_key")) return openSettings();
+  if (imgUploading) return showImgMsg("Wait for the upload to finish.", "err");
+  const prompt = $("imgPrompt").value.trim();
+  if (!prompt) return showImgMsg("Write a prompt first.", "err");
+  const btn = $("generateImage");
+  btn.disabled = true; btn.textContent = "Generating... (can take a minute)";
+  showImgMsg("Generating...", "ok");
+  try {
+    const r = await call("/api/generate-image", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: $("imgModel").value, prompt,
+        n: $("imgN").value, aspect_ratio: $("imgAspect").value, seed: $("imgSeed").value,
+        style: $("imgStyle").value, character: $("imgCharacter").value, character_strength: $("imgStrength").value,
+        images: imgRefs.map((x) => x.value), ntfy_topic: store.get("ntfy_topic"),
+      }),
+    });
+    const hist = imageHistory();
+    hist.unshift({ at: Date.now(), model: r.model, prompt, cost: r.cost_usd, urls: r.files.map((f) => f.url) });
+    store.set("image_history", JSON.stringify(hist.slice(0, 50)));
+    renderImages();
+    showImgMsg("Done: " + r.files.length + " image" + (r.files.length === 1 ? "" : "s") + (r.cost_usd != null ? " for $" + r.cost_usd.toFixed(3) : "") + ".", "ok");
+    loadBalance();
+  } catch (e) {
+    showImgMsg(e.message, "err");
+  } finally {
+    btn.disabled = false; btn.textContent = "Generate image";
+  }
+});
+
+// ---- Tabs ----
+function setTab(tab) {
+  document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+  $("videoForm").hidden = $("videoList").hidden = tab !== "video";
+  $("imageForm").hidden = $("imageList").hidden = tab !== "image";
+  store.set("tab", tab);
+}
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+
 function openSettings() {
   $("apiKey").value = store.get("vetta_key");
   $("topic").value = store.get("ntfy_topic");
@@ -379,7 +609,9 @@ async function init() {
     store.set("topic_set", "1");
   }
   if (!store.get("vetta_key")) { openSettings(); return; }
+  setTab(store.get("tab") === "image" ? "image" : "video");
   loadBalance(); loadModels(); loadCharacters(); loadJobs();
+  loadImgModels(); loadStyles(); renderImages();
 }
 init();
 </script>

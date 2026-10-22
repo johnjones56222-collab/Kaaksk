@@ -1,9 +1,10 @@
-// Vetta Video Studio: a small web app for generating videos with Vetta.
+// Vetta Video Studio: a small web app for generating videos and images with Vetta.
 // The browser can't call api.vetta.sh directly (no CORS), so this Worker serves
 // the page and forwards its calls, using the API key the page sends in
 // `x-vetta-key`. Every started video is tracked in KV and checked each minute
 // by the cron trigger, which sends an ntfy notification when it completes or
-// fails, even if the page is closed.
+// fails, even if the page is closed. Images render synchronously, so their
+// notification is sent as soon as the request settles.
 
 import PAGE from "./page.html";
 
@@ -44,20 +45,30 @@ async function mintUrl(key, fileId) {
 }
 
 // ntfy.sh rate-limits per IP and Workers share IPs, so retry a few times.
-async function notify(topic, title, message, tags, clickUrl) {
+async function notify(topic, title, message, tags, clickUrl, { attach, label = "Open video" } = {}) {
   const headers = { Title: title, Tags: tags, Priority: "high" };
   if (clickUrl) {
     headers.Click = clickUrl;
-    headers.Actions = `view, Open video, ${clickUrl}`;
+    headers.Actions = `view, ${label}, ${clickUrl}`;
   }
+  if (attach) headers.Attach = attach; // ntfy shows the image in the notification
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await new Promise((r) => setTimeout(r, 2500 * attempt));
+    // Last try is plain text, in case the attachment or button was what ntfy refused.
+    const h = attempt === 2 ? { Title: title, Tags: tags, Priority: "high" } : headers;
+    const body = attempt === 2 && clickUrl ? `${message}\n${clickUrl}` : message;
     try {
-      const res = await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, { method: "POST", headers, body: message });
+      const res = await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, { method: "POST", headers: h, body });
       if (res.ok) return true;
     } catch {}
   }
   return false;
+}
+
+// A notification ntfy refused is kept in KV and retried by checkJobs.
+async function notifyOrQueue(env, n) {
+  if (await notify(n.topic, n.title, n.message, n.tags, n.click, { attach: n.attach, label: n.label })) return;
+  await env.KV.put(`note:${crypto.randomUUID()}`, JSON.stringify({ ...n, attempts: 1 }));
 }
 
 async function listAll(key, path) {
@@ -72,12 +83,16 @@ async function listAll(key, path) {
   return out;
 }
 
-async function api(req, env, path) {
+const DEFAULT_STYLES = ["Phone snap", "Realistic", "Everyday", "Library", "Quiet luxury", "Through the glass", "Flight mode",
+  "Selfcare", "Japandi", "Foggy morning", "Rainy day", "90s editorial", "Wide-angle outfit", "Elevator mirror", "Escalator", "Tokyo street style"];
+
+async function api(req, env, ctx, path) {
   const key = (req.headers.get("x-vetta-key") || "").trim();
   if (!key.startsWith("sk_")) return json({ error: "Add your Vetta API key in Settings." }, 401);
 
   if (path === "/api/models") {
-    const models = await listAll(key, "/media/models?kind=video");
+    const kind = new URL(req.url).searchParams.get("kind") === "image" ? "image" : "video";
+    const models = await listAll(key, `/media/models?kind=${kind}`);
     return json(models.map((m) => ({ id: m.id, name: m.name, description: m.description })));
   }
 
@@ -92,6 +107,21 @@ async function api(req, env, path) {
   if (path === "/api/characters") {
     const chars = await listAll(key, "/characters").catch(() => []);
     return json(chars.filter((c) => c.status === "ready").map((c) => ({ id: c.id, name: c.name, scope: c.scope })));
+  }
+
+  // Vetta publishes no list of image styles, but its validation error names them,
+  // so ask with an invalid style and a model that doesn't exist (nothing renders).
+  if (path === "/api/styles") {
+    try {
+      await vetta(key, "POST", "/media/images", {
+        json: { model: "none/none", prompt: "x", style: "__list__" },
+        headers: { "idempotency-key": crypto.randomUUID() },
+      });
+    } catch (err) {
+      const m = err.message.match(/use one of: (.+)$/);
+      if (m) return json(m[1].split(",").map((x) => x.trim()).filter(Boolean));
+    }
+    return json(DEFAULT_STYLES);
   }
 
   // The raw file is the request body; it goes to Vetta Files. Videos also get a
@@ -130,6 +160,38 @@ async function api(req, env, path) {
     return json({ id: job.id, status: job.status, model: job.model, tracked: Boolean(topic) });
   }
 
+  if (path === "/api/generate-image" && req.method === "POST") {
+    const b = await req.json();
+    const topic = (b.ntfy_topic || env.NTFY_TOPIC || "").trim();
+    const what = `${b.model}\n"${(b.prompt || "").slice(0, 140)}"`;
+    try {
+      const res = await vetta(key, "POST", "/media/images", {
+        json: strip({
+          model: b.model,
+          prompt: b.prompt,
+          n: b.n ? Number(b.n) : undefined,
+          aspect_ratio: b.aspect_ratio,
+          seed: b.seed !== "" && b.seed != null ? Number(b.seed) : undefined,
+          character: b.character,
+          character_strength: b.character && b.character_strength ? Number(b.character_strength) : undefined,
+          style: b.style,
+          image_urls: b.images?.length ? b.images.slice(0, 4) : undefined,
+        }),
+        headers: { "idempotency-key": crypto.randomUUID() },
+      });
+      const files = await Promise.all((res.files || []).map(async (f) => ({ file_id: f.id, url: await mintUrl(key, f.id), width: f.width, height: f.height })));
+      const cost = res.cost_micro_usd != null ? res.cost_micro_usd / 1e6 : null;
+      if (topic) {
+        const msg = `${what}\n${files.length} image${files.length === 1 ? "" : "s"}${cost != null ? ` · $${cost.toFixed(3)}` : ""}`;
+        ctx.waitUntil(notifyOrQueue(env, { topic, title: "Image ready", message: msg, tags: "white_check_mark,frame_with_picture", click: files[0]?.url, attach: files[0]?.url, label: "Open image" }));
+      }
+      return json({ model: res.model, cost_usd: cost, files });
+    } catch (err) {
+      if (topic) ctx.waitUntil(notifyOrQueue(env, { topic, title: "Image failed", message: `${what}\n${err.message}`, tags: "x" }));
+      throw err;
+    }
+  }
+
   if (path === "/api/jobs") {
     const page = await vetta(key, "GET", "/media?kind=video&limit=20");
     const jobs = await Promise.all(page.data.map(async (j) => {
@@ -152,8 +214,22 @@ async function api(req, env, path) {
   return json({ error: "Not found" }, 404);
 }
 
-// Cron: follow every tracked job and notify once it settles.
+// Runs from the cron trigger and, as a backup, from page traffic (at most every
+// 20s per isolate): follows every tracked video job and notifies once it
+// settles, and retries image notifications ntfy refused.
+let lastCheck = 0;
+
 async function checkJobs(env) {
+  lastCheck = Date.now();
+  const notes = await env.KV.list({ prefix: "note:" });
+  for (const { name } of notes.keys.slice(0, 3)) {
+    const n = JSON.parse((await env.KV.get(name)) || "null");
+    if (!n) continue;
+    const ok = await notify(n.topic, n.title, n.message, n.tags, n.click, { attach: n.attach, label: n.label });
+    if (ok || n.attempts >= MAX_NOTIFY_ATTEMPTS) await env.KV.delete(name);
+    else await env.KV.put(name, JSON.stringify({ ...n, attempts: n.attempts + 1 }));
+  }
+
   const { keys } = await env.KV.list({ prefix: "job:" });
   for (const { name } of keys.slice(0, MAX_JOBS_PER_RUN)) {
     const rec = JSON.parse((await env.KV.get(name)) || "null");
@@ -186,11 +262,12 @@ async function checkJobs(env) {
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const path = new URL(req.url).pathname;
     if (path.startsWith("/api/")) {
+      if (Date.now() - lastCheck > 20_000) ctx.waitUntil(checkJobs(env));
       try {
-        return await api(req, env, path);
+        return await api(req, env, ctx, path);
       } catch (err) {
         return json({ error: err.message }, err.status || 500);
       }
