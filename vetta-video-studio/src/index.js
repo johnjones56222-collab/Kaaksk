@@ -44,7 +44,10 @@ async function mintUrl(key, fileId) {
   return (await vetta(key, "POST", `/files/${fileId}/url`)).url;
 }
 
-// ntfy.sh rate-limits per IP and Workers share IPs, so retry a few times.
+// ntfy.sh rate-limits per IP and Workers share IPs, so messages are sent with
+// the account token (NTFY_TOKEN secret) when there is one, and retried.
+let NTFY_TOKEN = "";
+
 async function notify(topic, title, message, tags, clickUrl, { attach, label = "Open video" } = {}) {
   const headers = { Title: title, Tags: tags, Priority: "high" };
   if (clickUrl) {
@@ -52,10 +55,11 @@ async function notify(topic, title, message, tags, clickUrl, { attach, label = "
     headers.Actions = `view, ${label}, ${clickUrl}`;
   }
   if (attach) headers.Attach = attach; // ntfy shows the image in the notification
+  if (NTFY_TOKEN) headers.Authorization = `Bearer ${NTFY_TOKEN}`;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await new Promise((r) => setTimeout(r, 2500 * attempt));
     // Last try is plain text, in case the attachment or button was what ntfy refused.
-    const h = attempt === 2 ? { Title: title, Tags: tags, Priority: "high" } : headers;
+    const h = attempt === 2 ? { Title: title, Tags: tags, Priority: "high", ...(NTFY_TOKEN ? { Authorization: headers.Authorization } : {}) } : headers;
     const body = attempt === 2 && clickUrl ? `${message}\n${clickUrl}` : message;
     try {
       const res = await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, { method: "POST", headers: h, body });
@@ -263,6 +267,7 @@ async function checkJobs(env) {
 
 export default {
   async fetch(req, env, ctx) {
+    NTFY_TOKEN = env.NTFY_TOKEN || "";
     const path = new URL(req.url).pathname;
     if (path.startsWith("/api/")) {
       if (Date.now() - lastCheck > 20_000) ctx.waitUntil(checkJobs(env));
@@ -277,6 +282,7 @@ export default {
   },
 
   async scheduled(_event, env, ctx) {
+    NTFY_TOKEN = env.NTFY_TOKEN || "";
     ctx.waitUntil(checkJobs(env));
   },
 };

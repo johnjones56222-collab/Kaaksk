@@ -19,4 +19,5 @@ https://vetta-video-studio.johnjones56222.workers.dev
   once the notification is sent. Page traffic also runs the same check (at most
   every 20 s) as a backup to the cron trigger.
 
-Deploy with `npx wrangler deploy`.
+Secret: `NTFY_TOKEN` (ntfy.sh account token; messages count against the account
+instead of the per-IP limit Workers share). Deploy with `npx wrangler deploy`.
