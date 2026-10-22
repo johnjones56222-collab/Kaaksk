@@ -205,7 +205,7 @@ async function handleRpc(key, msg) {
 
 const CORS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-headers": "authorization, content-type, mcp-session-id, mcp-protocol-version",
+  "access-control-allow-headers": "authorization, x-api-key, content-type, mcp-session-id, mcp-protocol-version",
   "access-control-allow-methods": "POST, OPTIONS",
 };
 
@@ -213,14 +213,17 @@ export default {
   async fetch(req) {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
+    // No OAuth here: answer discovery probes with 404 so clients fall back to headers.
+    if (url.pathname.startsWith("/.well-known/")) return new Response("Not found", { status: 404, headers: CORS });
     if (url.pathname !== "/mcp")
-      return new Response("Vetta media MCP server. Connect to /mcp with Authorization: Bearer <your Vetta API key>.\n", { headers: CORS });
+      return new Response("Vetta media MCP server. Connect to /mcp with your Vetta API key in an x-api-key header (or Authorization: Bearer).\n", { headers: CORS });
     if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: { ...CORS, allow: "POST" } });
 
-    const key = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    // Clients that reserve Authorization for OAuth (e.g. Claude custom connectors) can send x-api-key instead.
+    const key = (req.headers.get("x-api-key") || req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
     if (!key.startsWith("sk_"))
       return Response.json(
-        { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Send your Vetta API key as Authorization: Bearer sk_live_..." } },
+        { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Send your Vetta API key in an x-api-key header (or Authorization: Bearer sk_live_...)." } },
         { status: 401, headers: CORS },
       );
 

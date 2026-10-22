@@ -3,8 +3,10 @@
 Remote MCP server that lets an agent generate images and videos through Vetta.
 
 URL: `https://vetta-media-mcp.johnjones56222.workers.dev/mcp`
-Auth: `Authorization: Bearer <any Vetta API key>`. The server stores no key; it
-passes the caller's key to Vetta, so each call is billed to that key's account.
+Auth: send any Vetta API key as an `x-api-key` header (use this in Claude
+custom connectors, which reserve `Authorization` for OAuth) or as
+`Authorization: Bearer <key>`. The server stores no key; it passes the caller's
+key to Vetta, so each call is billed to that key's account.
 
 Tools:
 
