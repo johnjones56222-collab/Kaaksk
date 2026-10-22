@@ -1,0 +1,6 @@
+{
+  "name": "vetta-media-mcp",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01"
+  // No secrets: each client sends its own Vetta key as the bearer token.
+}
