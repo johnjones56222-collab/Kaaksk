@@ -1,5 +1,5 @@
 // Remote MCP server (Streamable HTTP, stateless JSON) that lets an agent
-// generate images and videos through Vetta. It stores no key: the client's
+// generate images and videos, chat with any LLM, and check its balance through Vetta. It stores no key: the client's
 // `Authorization: Bearer sk_live_...` header is passed straight to Vetta, so
 // any Vetta key works and each call is billed to that key's account.
 
@@ -65,6 +65,46 @@ const TOOLS = [
         search: { type: "string", description: "Optional filter text, e.g. seedance." },
       },
       required: ["kind"],
+    },
+  },
+  {
+    name: "check_balance",
+    description: "Show the Vetta credit balance (USD) and subscription status for the API key in use.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "chat",
+    description:
+      "Call any Vetta LLM (Claude, GPT, Gemini, Grok, DeepSeek, Qwen, ...) and return its reply. Text only: " +
+      "Vetta's chat endpoint does not accept images. Use list_llm_models to find model ids.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        model: { type: "string", description: "Model id, e.g. anthropic/claude-sonnet-5.5, google/gemini-4-argon, openai/gpt-6.1-sol." },
+        prompt: { type: "string", description: "The user message. Use this or messages." },
+        system: { type: "string", description: "Optional system prompt." },
+        messages: {
+          type: "array",
+          description: "Full conversation instead of prompt: [{role: 'user'|'assistant'|'system', content: '...'}].",
+          items: {
+            type: "object",
+            properties: { role: { type: "string", enum: ["system", "user", "assistant"] }, content: { type: "string" } },
+            required: ["role", "content"],
+          },
+        },
+        max_tokens: { type: "integer", minimum: 1, description: "Reply length cap (default 4096). Reasoning models spend some of it thinking." },
+        temperature: { type: "number", minimum: 0, maximum: 2 },
+        window: { type: "string", enum: ["immediate", "priority", "loose"], description: "Vetta speed/price tier (default immediate)." },
+      },
+      required: ["model"],
+    },
+  },
+  {
+    name: "list_llm_models",
+    description: "List Vetta text models (LLMs) with their context window and max output. Filter with search.",
+    inputSchema: {
+      type: "object",
+      properties: { search: { type: "string", description: "Text to match in the model id, e.g. claude, gemini, gpt-6." } },
     },
   },
   {
@@ -163,6 +203,55 @@ async function callTool(key, name, a) {
       const res = await vetta(key, "GET", `/media/models?${q}`);
       return res.data.map((m) => ({ id: m.id, name: m.name, description: m.description }));
     }
+    case "check_balance": {
+      const [bal, sub] = await Promise.all([
+        vetta(key, "GET", "/credits/balance"),
+        vetta(key, "GET", "/credits/subscription").catch(() => null),
+      ]);
+      return strip({
+        balance_usd: bal.balance_micro_usd / 1e6,
+        mode: bal.mode,
+        plan: sub?.plan,
+        subscription_status: sub?.status,
+        trial_end: sub?.trial_end,
+        renews_at: sub?.current_period_end,
+      });
+    }
+    case "chat": {
+      const messages = a.messages?.length
+        ? [...(a.system ? [{ role: "system", content: a.system }] : []), ...a.messages]
+        : [...(a.system ? [{ role: "system", content: a.system }] : []), { role: "user", content: a.prompt ?? "" }];
+      if (!a.messages?.length && !a.prompt) throw new VettaError("Give either prompt or messages.");
+      const res = await vetta(key, "POST", "/proxy/openai/v1/chat/completions", strip({
+        model: a.model,
+        messages,
+        max_tokens: a.max_tokens ?? 4096,
+        temperature: a.temperature,
+      }), a.window ? { "vetta-window": a.window } : {});
+      const choice = res.choices?.[0];
+      return strip({
+        model: res.model,
+        reply: choice?.message?.content ?? "",
+        finish_reason: choice?.finish_reason,
+        note: choice?.finish_reason === "length" ? "Hit max_tokens before finishing; raise max_tokens." : undefined,
+        usage: res.usage,
+        request_id: res.id,
+      });
+    }
+    case "list_llm_models": {
+      const models = [];
+      let after;
+      do {
+        const page = await vetta(key, "GET", `/models?${new URLSearchParams(strip({ limit: "100", after }))}`);
+        models.push(...page.data);
+        after = page.has_more ? page.next_cursor : undefined;
+      } while (after);
+      const q = (a.search || "").toLowerCase();
+      return models
+        // `:batch` ids are still listed but the chat endpoint answers "unknown model" for them.
+        .filter((m) => !m.id.endsWith(":batch") && (!q || m.id.toLowerCase().includes(q)))
+        .map((m) => ({ id: m.id, context_window: m.context_window, max_output_tokens: m.max_output_tokens }));
+    }
     case "import_file": {
       const file = await vetta(key, "POST", "/files/imports", { url: a.url });
       const u = await vetta(key, "POST", `/files/${file.id}/url`);
@@ -184,7 +273,7 @@ async function handleRpc(key, msg) {
         protocolVersion: params?.protocolVersion || PROTOCOL_VERSION,
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
-        instructions: "Generate images and videos with Vetta. Videos are async: start with generate_video, then poll get_media_job.",
+        instructions: "Generate images and videos, chat with any LLM, and check the balance through Vetta. Videos are async: start with generate_video, then poll get_media_job.",
       });
     case "ping":
       return reply({});
