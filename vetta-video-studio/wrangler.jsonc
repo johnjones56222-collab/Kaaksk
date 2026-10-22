@@ -1,0 +1,10 @@
+{
+  "name": "vetta-video-studio",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  // Checks tracked video jobs every minute and sends the ntfy notification.
+  "triggers": { "crons": ["* * * * *"] },
+  "kv_namespaces": [{ "binding": "KV", "id": "67b8739a1b184620babc86eac53f27e8" }],
+  "vars": { "NTFY_TOPIC": "vetta-f017cbb38b2aea3d" },
+  "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": true }]
+}

@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vetta Video Studio</title>
+<style>
+  :root {
+    --bg: #0b0d12; --panel: #141821; --panel2: #1b2030; --line: #262c3d;
+    --text: #e8ebf2; --muted: #8b93a7; --accent: #7c6cff; --accent2: #5a4be0;
+    --ok: #2fbf71; --bad: #ef5a5a; --warn: #e6a23c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(11,13,18,.92); backdrop-filter: blur(8px); z-index: 5; }
+  h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+  .pill { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .pill.good { color: var(--ok); }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 14px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  input, select, textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 9px; padding: 10px 11px; font: inherit; }
+  textarea { min-height: 120px; resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  button { font: inherit; border: 0; border-radius: 9px; padding: 10px 14px; cursor: pointer; background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; width: 100%; padding: 13px; margin-top: 18px; }
+  button.primary:hover { background: var(--accent2); }
+  button:disabled { opacity: .55; cursor: default; }
+  .iconbtn { padding: 7px 10px; }
+  .duration { display: flex; gap: 10px; align-items: center; }
+  .duration input[type=range] { flex: 1; padding: 0; accent-color: var(--accent); }
+  .duration input[type=number] { width: 80px; }
+  .ref { border: 1px dashed var(--line); border-radius: 10px; padding: 10px; }
+  .ref .line { display: flex; gap: 8px; }
+  .ref .line input[type=url] { flex: 1; }
+  .ref .status { font-size: 12.5px; color: var(--muted); margin-top: 8px; display: flex; align-items: center; gap: 10px; }
+  .ref img, .ref video { max-height: 70px; border-radius: 6px; }
+  .msg { margin-top: 12px; font-size: 13.5px; padding: 10px 12px; border-radius: 9px; display: none; }
+  .msg.err { display: block; background: rgba(239,90,90,.12); color: #ffb3b3; border: 1px solid rgba(239,90,90,.35); }
+  .msg.ok { display: block; background: rgba(47,191,113,.12); color: #a6efc7; border: 1px solid rgba(47,191,113,.35); }
+  .job { border-top: 1px solid var(--line); padding: 14px 0; }
+  .job:first-child { border-top: 0; padding-top: 0; }
+  .job .top { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); }
+  .job .prompt { margin: 6px 0; overflow-wrap: anywhere; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
+  .badge.completed { color: var(--ok); } .badge.failed, .badge.canceled, .badge.cancelled { color: var(--bad); }
+  .badge.queued, .badge.processing, .badge.running { color: var(--warn); }
+  .job video { width: 100%; border-radius: 10px; margin-top: 8px; background: black; }
+  .job a { color: var(--accent); }
+  .empty { color: var(--muted); font-size: 14px; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; width: min(460px, calc(100vw - 32px)); padding: 20px; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  .keyline { display: flex; gap: 8px; }
+  .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Vetta Video Studio</h1>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span class="pill" id="balance">no key</span>
+    <button class="iconbtn" id="openSettings" title="Settings">Settings</button>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>New video</h2>
+
+    <label for="model">Model</label>
+    <div style="display:flex;gap:8px">
+      <select id="model"><option>Loading models...</option></select>
+      <button class="iconbtn" id="refreshModels" title="Reload models">Reload</button>
+    </div>
+    <div class="hint" id="modelDesc"></div>
+
+    <label for="prompt">Prompt</label>
+    <textarea id="prompt" placeholder="Describe what happens in the video, scene by scene if you like."></textarea>
+
+    <label>Duration (seconds)</label>
+    <div class="duration">
+      <input type="range" id="secondsRange" min="1" max="60" value="5">
+      <input type="number" id="seconds" min="1" max="60" value="5">
+    </div>
+    <div class="hint">Each model supports its own lengths; Vetta adjusts or refuses ones it can't do. Longer videos cost more.</div>
+
+    <div class="row">
+      <div>
+        <label for="aspect">Aspect ratio</label>
+        <select id="aspect">
+          <option value="">Model default</option>
+          <option>16:9</option><option>9:16</option><option>1:1</option>
+          <option>4:3</option><option>3:4</option><option>21:9</option>
+        </select>
+      </div>
+      <div>
+        <label for="seed">Seed (optional)</label>
+        <input type="number" id="seed" placeholder="random">
+      </div>
+    </div>
+
+    <label for="character">Character (optional)</label>
+    <select id="character"><option value="">None</option></select>
+    <div class="hint">A trained character also needs a reference image that is a still of that character.</div>
+
+    <label>Reference image (1 max)</label>
+    <div class="ref" id="refImage">
+      <div class="line">
+        <input type="url" placeholder="Paste an image link, or upload" data-role="url">
+        <button class="iconbtn" data-role="pick">Upload</button>
+        <input type="file" accept="image/*" hidden data-role="file">
+      </div>
+      <div class="status" data-role="status"></div>
+    </div>
+
+    <label>Reference video (1 max)</label>
+    <div class="ref" id="refVideo">
+      <div class="line">
+        <input type="url" placeholder="Paste a video link, or upload" data-role="url">
+        <button class="iconbtn" data-role="pick">Upload</button>
+        <input type="file" accept="video/*" hidden data-role="file">
+      </div>
+      <div class="status" data-role="status"></div>
+    </div>
+    <div class="hint">Vetta accepts at most one reference image and one reference video per video.</div>
+
+    <button class="primary" id="generate">Generate video</button>
+    <div class="msg" id="msg"></div>
+  </section>
+
+  <section>
+    <h2 style="display:flex;justify-content:space-between;align-items:center">
+      <span>Your videos</span>
+      <button class="iconbtn" id="refreshJobs" style="text-transform:none;letter-spacing:0">Refresh</button>
+    </h2>
+    <div id="jobs" class="empty">Add your API key in Settings to see your videos.</div>
+  </section>
+</main>
+
+<dialog id="settings">
+  <h2>Settings</h2>
+  <label for="apiKey">Vetta API key</label>
+  <div class="keyline">
+    <input type="password" id="apiKey" placeholder="sk_live_..." autocomplete="off">
+    <button class="iconbtn" id="toggleKey">Show</button>
+  </div>
+  <div class="hint">Saved only in this browser. It is sent with each request so the server can call Vetta for you.</div>
+  <label for="topic">ntfy topic for notifications</label>
+  <input type="text" id="topic" placeholder="your-ntfy-topic">
+  <div class="hint">You get "Video ready" or "Video failed" here, even if this page is closed. Leave empty for no notifications.</div>
+  <div class="actions">
+    <button id="cancelSettings">Cancel</button>
+    <button class="primary" style="width:auto;margin:0" id="saveSettings">Save</button>
+  </div>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem(k) || ""; } catch { return ""; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+let models = [];
+let pollTimer = null;
+
+async function call(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: { "x-vetta-key": store.get("vetta_key"), ...(opts.headers || {}) } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+function showMsg(text, kind) {
+  const m = $("msg");
+  m.className = "msg " + kind;
+  m.textContent = text;
+}
+
+async function loadBalance() {
+  const pill = $("balance");
+  if (!store.get("vetta_key")) { pill.textContent = "no key"; pill.className = "pill"; return; }
+  try {
+    const b = await call("/api/balance");
+    pill.textContent = "$" + b.balance_usd.toFixed(2) + (b.subscription && b.subscription !== "active" ? " · " + b.subscription : "");
+    pill.className = "pill" + (b.balance_usd > 0 ? " good" : "");
+  } catch (e) { pill.textContent = "key error"; pill.className = "pill"; }
+}
+
+async function loadModels() {
+  const sel = $("model");
+  if (!store.get("vetta_key")) { sel.innerHTML = "<option>Add your API key first</option>"; return; }
+  sel.innerHTML = "<option>Loading models...</option>";
+  try {
+    models = await call("/api/models");
+    const last = store.get("last_model");
+    sel.innerHTML = "";
+    for (const m of models) {
+      const o = document.createElement("option");
+      o.value = m.id;
+      o.textContent = m.name || m.id;
+      sel.appendChild(o);
+    }
+    if (models.some((m) => m.id === last)) sel.value = last;
+    else if (models.some((m) => m.id === "bytedance/seedance-2.5")) sel.value = "bytedance/seedance-2.5";
+    showModelDesc();
+  } catch (e) { sel.innerHTML = "<option>Could not load models</option>"; showMsg(e.message, "err"); }
+}
+
+function showModelDesc() {
+  const m = models.find((x) => x.id === $("model").value);
+  $("modelDesc").textContent = m ? m.id + (m.description ? " · " + m.description : "") : "";
+}
+
+async function loadCharacters() {
+  if (!store.get("vetta_key")) return;
+  try {
+    const chars = await call("/api/characters");
+    const sel = $("character");
+    sel.innerHTML = '<option value="">None</option>';
+    for (const c of chars) {
+      const o = document.createElement("option");
+      o.value = c.name || c.id;
+      o.textContent = (c.name || c.id) + (c.scope === "platform" ? " (prebuilt)" : "");
+      sel.appendChild(o);
+    }
+  } catch {}
+}
+
+// Reference pickers: a pasted link is used as-is; an upload goes to Vetta Files first.
+function setupRef(boxId, kind) {
+  const box = $(boxId);
+  const q = (r) => box.querySelector(`[data-role="${r}"]`);
+  const state = { value: "", uploading: false };
+  q("pick").addEventListener("click", () => q("file").click());
+  q("url").addEventListener("input", () => {
+    state.value = q("url").value.trim();
+    q("status").textContent = state.value ? "Using this link." : "";
+  });
+  q("file").addEventListener("change", async () => {
+    const f = q("file").files[0];
+    if (!f) return;
+    state.uploading = true;
+    q("status").textContent = "Uploading " + f.name + "...";
+    try {
+      const r = await call("/api/upload", { method: "POST", body: f, headers: { "content-type": f.type || "application/octet-stream", "x-filename": encodeURIComponent(f.name) } });
+      // Images can be passed as the Vetta file id; videos need a link.
+      state.value = kind === "image" ? r.file_id : r.url;
+      q("url").value = "";
+      const status = q("status");
+      status.textContent = "";
+      const preview = document.createElement(kind === "image" ? "img" : "video");
+      preview.src = r.url;
+      if (kind === "video") preview.muted = true;
+      const name = document.createElement("span");
+      name.textContent = f.name + " uploaded";
+      const clear = document.createElement("button");
+      clear.className = "iconbtn";
+      clear.textContent = "Remove";
+      clear.onclick = () => { state.value = ""; status.textContent = ""; q("file").value = ""; };
+      status.append(preview, name, clear);
+    } catch (e) {
+      state.value = "";
+      q("status").textContent = "Upload failed: " + e.message;
+    } finally {
+      state.uploading = false;
+    }
+  });
+  return state;
+}
+const refImage = setupRef("refImage", "image");
+const refVideo = setupRef("refVideo", "video");
+
+$("secondsRange").addEventListener("input", (e) => ($("seconds").value = e.target.value));
+$("seconds").addEventListener("input", (e) => ($("secondsRange").value = e.target.value));
+$("model").addEventListener("change", () => { store.set("last_model", $("model").value); showModelDesc(); });
+$("refreshModels").addEventListener("click", loadModels);
+$("refreshJobs").addEventListener("click", loadJobs);
+
+$("generate").addEventListener("click", async () => {
+  if (!store.get("vetta_key")) return openSettings();
+  if (refImage.uploading || refVideo.uploading) return showMsg("Wait for the upload to finish.", "err");
+  const prompt = $("prompt").value.trim();
+  if (!prompt) return showMsg("Write a prompt first.", "err");
+  const btn = $("generate");
+  btn.disabled = true;
+  btn.textContent = "Starting...";
+  try {
+    const job = await call("/api/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: $("model").value,
+        prompt,
+        seconds: $("seconds").value,
+        aspect_ratio: $("aspect").value,
+        seed: $("seed").value,
+        character: $("character").value,
+        image: refImage.value,
+        video_url: refVideo.value,
+        ntfy_topic: store.get("ntfy_topic"),
+      }),
+    });
+    showMsg("Started " + job.id + ". " + (job.tracked ? "You'll get an ntfy notification when it's done." : "No ntfy topic set, so no notification."), "ok");
+    loadJobs();
+    loadBalance();
+  } catch (e) {
+    showMsg(e.message, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Generate video";
+  }
+});
+
+async function loadJobs() {
+  const box = $("jobs");
+  if (!store.get("vetta_key")) return;
+  try {
+    const jobs = await call("/api/jobs");
+    if (!jobs.length) { box.className = "empty"; box.textContent = "No videos yet."; return; }
+    box.className = "";
+    box.innerHTML = "";
+    for (const j of jobs) {
+      const el = document.createElement("div");
+      el.className = "job";
+      const top = document.createElement("div");
+      top.className = "top";
+      const left = document.createElement("span");
+      left.textContent = new Date(j.created_at).toLocaleString() + " · " + j.model + (j.seconds ? " · " + j.seconds + "s" : "") + (j.cost_usd != null ? " · $" + j.cost_usd.toFixed(2) : "");
+      const badge = document.createElement("span");
+      badge.className = "badge " + j.status;
+      badge.textContent = j.status;
+      top.append(left, badge);
+      const p = document.createElement("div");
+      p.className = "prompt";
+      p.textContent = j.prompt || "";
+      el.append(top, p);
+      if (j.error) { const e = document.createElement("div"); e.className = "hint"; e.textContent = j.error; el.append(e); }
+      if (j.url) {
+        const v = document.createElement("video");
+        v.src = j.url; v.controls = true; v.preload = "metadata";
+        const a = document.createElement("a");
+        a.href = j.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Download";
+        el.append(v, a);
+      }
+      box.append(el);
+    }
+    const pending = jobs.some((j) => ["queued", "processing", "running", "pending"].includes(j.status));
+    clearTimeout(pollTimer);
+    if (pending) pollTimer = setTimeout(loadJobs, 20000);
+  } catch (e) { box.className = "empty"; box.textContent = "Could not load videos: " + e.message; }
+}
+
+function openSettings() {
+  $("apiKey").value = store.get("vetta_key");
+  $("topic").value = store.get("ntfy_topic");
+  $("settings").showModal();
+}
+$("openSettings").addEventListener("click", openSettings);
+$("cancelSettings").addEventListener("click", () => $("settings").close());
+$("toggleKey").addEventListener("click", () => {
+  const i = $("apiKey");
+  i.type = i.type === "password" ? "text" : "password";
+  $("toggleKey").textContent = i.type === "password" ? "Show" : "Hide";
+});
+$("saveSettings").addEventListener("click", () => {
+  store.set("vetta_key", $("apiKey").value.trim());
+  store.set("ntfy_topic", $("topic").value.trim());
+  $("settings").close();
+  init();
+});
+
+async function init() {
+  if (!store.get("ntfy_topic") && !store.get("topic_set")) {
+    try { const c = await (await fetch("/api-config")).json(); if (c.ntfy_topic) store.set("ntfy_topic", c.ntfy_topic); } catch {}
+    store.set("topic_set", "1");
+  }
+  if (!store.get("vetta_key")) { openSettings(); return; }
+  loadBalance(); loadModels(); loadCharacters(); loadJobs();
+}
+init();
+</script>
+</body>
+</html>
