@@ -13,7 +13,8 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
   header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(11,13,18,.92); backdrop-filter: blur(8px); z-index: 5; }
-  h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+  h1 { font-size: 17px; margin: 0; letter-spacing: .2px; white-space: nowrap; }
+  @media (max-width: 420px) { header { padding: 12px 16px; gap: 8px; } header h1 { font-size: 15px; } header > div { gap: 6px !important; } header .iconbtn { padding: 6px 8px; font-size: 13px; } header .pill { padding: 3px 8px; font-size: 12px; } }
   .pill { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
   .pill.good { color: var(--ok); }
   main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
@@ -69,6 +70,16 @@
   @keyframes shimmer { to { background-position: -200% 0; } }
   .job .dismiss { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 13px; }
   .strength { display: flex; gap: 10px; align-items: center; }
+  #openUpdates { position: relative; }
+  #openUpdates .dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  #updates { width: min(560px, calc(100vw - 32px)); }
+  .updates { max-height: 65vh; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+  .update { border-top: 1px solid var(--line); padding: 12px 0; }
+  .update:first-child { border-top: 0; padding-top: 0; }
+  .update .when { font-size: 12.5px; color: var(--muted); }
+  .update h3 { font-size: 15px; margin: 2px 0 6px; }
+  .update ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+  .update li { margin: 3px 0; }
   .strength input[type=range] { flex: 1; padding: 0; accent-color: var(--accent); }
 </style>
 </head>
@@ -77,6 +88,7 @@
   <h1>Vetta Studio</h1>
   <div style="display:flex;gap:10px;align-items:center">
     <span class="pill" id="balance">no key</span>
+    <button class="iconbtn" id="openUpdates" title="What's new" hidden>Updates</button>
     <button class="iconbtn" id="openSettings" title="Settings">Settings</button>
   </div>
 </header>
@@ -229,6 +241,12 @@
     </div>
   </section>
 </main>
+
+<dialog id="updates">
+  <h2>Updates</h2>
+  <div class="updates" id="updateList"></div>
+  <div class="actions"><button id="closeUpdates">Close</button></div>
+</dialog>
 
 <dialog id="settings">
   <h2>Settings</h2>
@@ -671,6 +689,53 @@ function setTab(tab) {
   store.set("tab", tab);
 }
 document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+
+// ---- Update log (website only; a copy opened as a local file doesn't show it) ----
+const UPDATES = [
+  { id: 6, date: "2026-10-22", title: "Update log", items: [
+    "This list. The Updates button shows a dot when there's something new." ] },
+  { id: 5, date: "2026-10-22", title: "Nothing disappears on refresh", items: [
+    "Images and videos stay on the page when you reload: unfinished ones show as generating or starting and update by themselves.",
+    "Your image list now comes from your Vetta account, so it's the same on every device and browser.",
+    "Reloading or closing the page no longer cancels an image, and you still get the ntfy notification." ] },
+  { id: 4, date: "2026-10-22", title: "Download as a file", items: [
+    "A single-file copy of the studio that you can open from your own device." ] },
+  { id: 3, date: "2026-10-22", title: "More reliable notifications", items: [
+    "Notifications are sent with your ntfy account, so ntfy's shared limit no longer drops them. Any it still refuses are retried." ] },
+  { id: 2, date: "2026-10-22", title: "Image generation", items: [
+    "Image tab with every Vetta image model, loaded live.",
+    "1–4 images, aspect ratio, style, seed, character and strength, and up to 4 reference images.",
+    "ntfy \"Image ready\" (with the picture) or \"Image failed\"." ] },
+  { id: 1, date: "2026-10-22", title: "Vetta Studio launched", items: [
+    "Pick any Vetta video model (new ones appear automatically), plus duration, aspect ratio, seed and character.",
+    "One reference image and one reference video, by link or upload.",
+    "ntfy notification when a video is ready or fails, even with the page closed." ] },
+];
+function renderUpdates() {
+  const box = $("updateList");
+  box.innerHTML = "";
+  for (const u of UPDATES) {
+    const el = document.createElement("div"); el.className = "update";
+    const when = document.createElement("div"); when.className = "when";
+    when.textContent = new Date(u.date + "T12:00:00").toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    const h = document.createElement("h3"); h.textContent = u.title;
+    const ul = document.createElement("ul");
+    for (const t of u.items) { const li = document.createElement("li"); li.textContent = t; ul.append(li); }
+    el.append(when, h, ul); box.append(el);
+  }
+}
+if (location.protocol !== "file:") {
+  const btn = $("openUpdates");
+  btn.hidden = false;
+  if (Number(store.get("updates_seen")) < UPDATES[0].id) { const d = document.createElement("span"); d.className = "dot"; btn.append(d); }
+  btn.addEventListener("click", () => {
+    renderUpdates();
+    $("updates").showModal();
+    store.set("updates_seen", String(UPDATES[0].id));
+    btn.querySelector(".dot")?.remove();
+  });
+  $("closeUpdates").addEventListener("click", () => $("updates").close());
+}
 
 function openSettings() {
   $("apiKey").value = store.get("vetta_key");

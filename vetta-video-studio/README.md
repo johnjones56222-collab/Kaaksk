@@ -31,3 +31,8 @@ instead of the per-IP limit Workers share). Deploy with `npx wrangler deploy`.
 
 `standalone.html` is the same page as a single file you can open from your device;
 it calls the deployed server, which allows that via CORS.
+
+The Updates button in the header opens the update log (`UPDATES` in
+`src/page.html`; add new entries at the top with a higher `id`). It shows a dot
+until the newest entry has been seen, and only appears on the website, not
+when the page is opened as a local file.
