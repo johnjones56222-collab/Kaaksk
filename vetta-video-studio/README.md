@@ -13,6 +13,14 @@ https://vetta-video-studio.johnjones56222.workers.dev
   reference images. Images render right away and send ntfy "Image ready"
   (with the picture) or "Image failed". Refused notifications are queued in
   KV (`note:`) and retried.
+- Agent tab: a chat with any Vetta LLM (default
+  `deepseek/deepseek-v4.1-flash-1017`) that makes videos and images through
+  tools (generate_video, generate_image, check_video, list_models,
+  get_balance). The loop runs in the page; the Worker's `/api/chat` only
+  forwards each step to Vetta's chat endpoint. Generations wait for Approve
+  unless "Ask me before generating" is off. Each tool call's idempotency key
+  comes from its call id, so re-running one after a reload can't double-charge.
+  The chat is kept in localStorage.
 - Reloading never loses work. The image list is read from the account's Vetta
   Files (`/api/images`), and the video list from its media jobs. A request
   still running is saved in the browser and shown as "generating"/"starting"

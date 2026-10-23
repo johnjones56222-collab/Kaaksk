@@ -11,6 +11,7 @@
 import PAGE from "./page.html";
 
 const VETTA = "https://api.vetta.sh/v1";
+const CHAT_PATH = "/proxy/openai/v1/chat/completions";
 const MAX_JOBS_PER_RUN = 6; // keeps a cron run well under the subrequest limit
 const MAX_NOTIFY_ATTEMPTS = 30; // ~30 minutes of retries if ntfy keeps refusing
 const GIVE_UP_AFTER_MS = 3 * 60 * 60_000;
@@ -234,6 +235,23 @@ async function api(req, env, ctx, path) {
     const work = generateImage(env, ctx, key, b);
     ctx.waitUntil(work.catch(() => {}));
     return json(await work);
+  }
+
+  // LLMs for the Agent tab. Batch-only models can't answer a chat, so they're left out.
+  if (path === "/api/llm-models") {
+    const models = await listAll(key, "/models");
+    return json(models.filter((m) => !m.supported_windows || m.supported_windows.includes("immediate")).map((m) => m.id).sort());
+  }
+
+  // One step of the agent: forwards the conversation and tool definitions to
+  // Vetta's chat endpoint. The page runs the tools itself (after asking you,
+  // unless auto mode is on) and sends the results back in the next step.
+  if (path === "/api/chat" && req.method === "POST") {
+    const b = await req.json();
+    const res = await vetta(key, "POST", CHAT_PATH, {
+      json: strip({ model: b.model, messages: b.messages, tools: b.tools, max_tokens: Math.min(Number(b.max_tokens) || 2000, 4000) }),
+    });
+    return json(res);
   }
 
   // Images generated with this key, newest first, from Vetta Files.

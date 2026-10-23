@@ -68,8 +68,35 @@
   .gallery a img { width: 100%; border-radius: 10px; display: block; background: #000; }
   .gallery .ph { aspect-ratio: 1; border-radius: 10px; background: linear-gradient(90deg, var(--panel2), var(--line), var(--panel2)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
   @keyframes shimmer { to { background-position: -200% 0; } }
-  .job .dismiss { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 13px; }
+  .dismiss { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 13px; }
   .strength { display: flex; gap: 10px; align-items: center; }
+  #videoList:not([hidden]) + #imageList:not([hidden]) { margin-top: 26px; }
+  .chat { display: flex; flex-direction: column; gap: 10px; min-height: 180px; max-height: 58vh; overflow-y: auto; margin: 14px 0 10px; padding: 2px; }
+  .chat .empty { margin: auto; text-align: center; max-width: 340px; }
+  .bubble { padding: 10px 12px; border-radius: 12px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; max-width: 88%; }
+  .bubble.user { align-self: flex-end; background: var(--accent); color: white; }
+  .bubble.bot { align-self: flex-start; background: var(--panel2); border: 1px solid var(--line); }
+  .bubble.err { align-self: stretch; background: rgba(239,90,90,.12); color: #ffb3b3; border: 1px solid rgba(239,90,90,.35); max-width: none; }
+  .bubble .att { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .bubble .att img, .bubble .att video { height: 56px; border-radius: 6px; }
+  .thinking { align-self: flex-start; color: var(--muted); font-size: 13.5px; }
+  .tool { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; background: rgba(255,255,255,.02); }
+  .tool.ask { border-color: var(--warn); }
+  .tool .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 600; }
+  .tool dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 0; }
+  .tool dt { color: var(--muted); }
+  .tool dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .tool .btns { display: flex; gap: 8px; margin-top: 10px; }
+  .tool .btns button { flex: 1; }
+  .tool .btns .yes { background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; }
+  .tool .gallery { margin-top: 8px; }
+  .tool video { width: 100%; border-radius: 10px; margin-top: 8px; background: black; }
+  .composer textarea { min-height: 76px; }
+  .composer .line { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+  .composer .line .grow { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .composer .line button.primary { width: auto; margin: 0; padding: 10px 18px; }
+  .switch { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 0; color: var(--text); font-size: 14px; cursor: pointer; }
+  .switch input { width: auto; accent-color: var(--accent); }
   #openUpdates { position: relative; }
   #openUpdates .dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
   #updates { width: min(560px, calc(100vw - 32px)); }
@@ -95,7 +122,7 @@
 
 <main>
   <section>
-    <div class="tabs"><button data-tab="video" class="on">Video</button><button data-tab="image">Image</button></div>
+    <div class="tabs"><button data-tab="video" class="on">Video</button><button data-tab="image">Image</button><button data-tab="agent">Agent</button></div>
     <div id="videoForm">
     <h2>New video</h2>
 
@@ -223,6 +250,28 @@
 
     <button class="primary" id="generateImage">Generate image</button>
     <div class="msg" id="imgMsg"></div>
+    </div>
+
+    <div id="agentForm" hidden>
+    <h2 style="display:flex;justify-content:space-between;align-items:center">
+      <span>Agent</span>
+      <button class="iconbtn" id="agentNew" style="text-transform:none;letter-spacing:0">New chat</button>
+    </h2>
+    <label for="agentModel" style="margin-top:0">Model</label>
+    <input id="agentModel" list="llmModels" autocomplete="off" spellcheck="false">
+    <datalist id="llmModels"></datalist>
+    <label class="switch" style="padding-bottom:0"><input type="checkbox" id="agentConfirm" checked> Ask me before generating</label>
+    <div class="hint" id="agentModeHint"></div>
+    <div class="chat" id="chat"></div>
+    <div class="composer">
+      <textarea id="agentInput" placeholder="Ask for a video or image, e.g. &quot;a 10 second clip of a fox running through snow, 16:9&quot;"></textarea>
+      <div class="line">
+        <button class="iconbtn" id="agentAttach" title="Attach an image or video as a reference">Attach</button>
+        <input type="file" id="agentFile" accept="image/*,video/*" multiple hidden>
+        <span class="grow" id="agentAttachments"></span>
+        <button class="primary" id="agentSend">Send</button>
+      </div>
+    </div>
     </div>
   </section>
 
@@ -681,17 +730,374 @@ $("generateImage").addEventListener("click", async () => {
   }
 });
 
+// ---- Agent ----
+// An LLM (through Vetta's chat endpoint) that makes videos and images by
+// calling the same endpoints as the forms above. The loop runs in this page:
+// each step sends the conversation to /api/chat, then runs the tools the model
+// asked for. Generating spends credits, so those tools wait for Approve unless
+// "Ask me before generating" is off. The chat is kept in localStorage, so a reload
+// picks up where it was (a pending approval shows its buttons again).
+const AGENT_DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash-1017";
+const AGENT_MAX_STEPS = 8; // model calls per message, so a confused model can't loop forever
+const SPENDS = new Set(["generate_video", "generate_image"]);
+const AGENT_TOOLS = [
+  { name: "generate_video", description: "Start a video generation. Returns a job id at once; the video renders in the background (usually a few minutes) and shows up in the user's video list.",
+    parameters: { type: "object", required: ["prompt"], properties: {
+      prompt: { type: "string", description: "Detailed description of the video: subject, action, setting, camera, lighting, style; for longer videos, the scenes in order." },
+      model: { type: "string", description: "Video model id from list_models. Leave out to use the user's default." },
+      seconds: { type: "integer", description: "Length in seconds. Each model supports its own range; leave out for the model default." },
+      aspect_ratio: { type: "string", description: "e.g. 16:9, 9:16, 1:1, 4:3, 3:4, 21:9. Leave out for the model default." },
+      seed: { type: "integer" },
+      reference_image: { type: "string", description: "One image to base the video on: a Vetta file id (fil_...) or an image link." },
+      reference_video: { type: "string", description: "A video link to use as reference (motion, camera, audio)." } } } },
+  { name: "generate_image", description: "Generate 1-4 images. Takes a few seconds to a minute and returns the images.",
+    parameters: { type: "object", required: ["prompt"], properties: {
+      prompt: { type: "string", description: "Detailed description of the image." },
+      model: { type: "string", description: "Image model id from list_models. Leave out to use the user's default." },
+      n: { type: "integer", minimum: 1, maximum: 4 },
+      aspect_ratio: { type: "string" },
+      style: { type: "string", description: "Optional Vetta style name." },
+      reference_images: { type: "array", maxItems: 4, items: { type: "string" }, description: "Vetta file ids (fil_...) or image links." } } } },
+  { name: "check_video", description: "Get the status of a video job, and its link when it's done.",
+    parameters: { type: "object", required: ["id"], properties: { id: { type: "string", description: "Job id (med_...)" } } } },
+  { name: "list_models", description: "List the available video or image models with short descriptions.",
+    parameters: { type: "object", required: ["kind"], properties: { kind: { type: "string", enum: ["video", "image"] } } } },
+  { name: "get_balance", description: "The user's Vetta credit balance in USD.", parameters: { type: "object", properties: {} } },
+].map((f) => ({ type: "function", function: f }));
+
+let agent = loadAgent();
+let agentRunning = false, agentStop = false;
+const agentAttachments = []; // { kind, value, url, name }
+let agentUploading = 0;
+
+function loadAgent() {
+  try { const a = JSON.parse(store.get("agent_chat")); if (a && Array.isArray(a.messages)) return { cards: {}, ...a }; } catch {}
+  return { messages: [], cards: {} };
+}
+function saveAgent() { store.set("agent_chat", JSON.stringify(agent)); }
+const confirmOn = () => store.get("agent_confirm") !== "0";
+// The forms' current models, or the last saved choice while those lists are still loading.
+const defaultModel = (kind) => kind === "video"
+  ? (models.length ? $("model").value : store.get("last_model") || "bytedance/seedance-2.5")
+  : (imgModels.length ? $("imgModel").value : store.get("last_img_model") || "openai/gpt-image-2.5-sunburst");
+// A generation's model is fixed when it's first shown, so what you approve is what runs.
+const modelFor = (c) => parseArgs(c).model || agent.cards[c.id]?.model || defaultModel(c.function.name === "generate_video" ? "video" : "image");
+const agentModel = () => $("agentModel").value.trim() || AGENT_DEFAULT_MODEL;
+
+function systemPrompt() {
+  return [
+    "You are the agent inside Vetta Studio, a web app for making AI videos and images with Vetta. You make what the user asks for by calling tools.",
+    "- Turn short requests into rich, specific prompts (subject, action, setting, camera, lighting, style). Ask a question only when the request is too unclear to act on.",
+    `- Defaults unless the user says otherwise: video model ${defaultModel("video") || "(ask list_models)"}, image model ${defaultModel("image") || "(ask list_models)"}. Call list_models if the user wants another model or you aren't sure an id exists.`,
+    "- generate_video returns right away; the video appears in the user's video list and they get a notification when it's ready. Don't poll check_video unless the user asks.",
+    "- Generating costs the user's credits, so only start what they asked for. " + (confirmOn()
+      ? "The user approves each generation first. If they decline, ask what to change."
+      : "Auto mode is on: generations start without asking."),
+    "- Files the user attached are listed in their message as image file ids (fil_...) or video links; use them as reference_image(s) or reference_video.",
+    "- Keep replies short and plain (no markdown tables). Reply in the user's language.",
+  ].join("\n");
+}
+
+async function loadLlmModels() {
+  const input = $("agentModel");
+  input.value = store.get("agent_model") || AGENT_DEFAULT_MODEL;
+  try {
+    const ids = await call("/api/llm-models");
+    $("llmModels").innerHTML = "";
+    for (const id of ids) { const o = document.createElement("option"); o.value = id; $("llmModels").append(o); }
+  } catch {}
+}
+$("agentModel").addEventListener("change", () => store.set("agent_model", $("agentModel").value.trim()));
+$("agentModel").addEventListener("focus", (e) => e.target.select());
+
+function showMode() {
+  $("agentConfirm").checked = confirmOn();
+  $("agentModeHint").textContent = confirmOn()
+    ? "The agent asks you before it starts any video or image."
+    : "Auto: the agent starts videos and images without asking, using your credits.";
+}
+$("agentConfirm").addEventListener("change", () => {
+  store.set("agent_confirm", $("agentConfirm").checked ? "1" : "0");
+  showMode();
+  // Turning approval off also lets a request that's waiting go ahead.
+  if (!confirmOn() && pendingApproval()) runAgent();
+});
+showMode();
+
+const TOOL_LABEL = { generate_video: "Make a video", generate_image: "Make images", check_video: "Check video", list_models: "List models", get_balance: "Check balance" };
+const parseArgs = (c) => { try { return JSON.parse(c.function.arguments || "{}"); } catch { return {}; } };
+const hasResult = (id) => agent.messages.some((m) => m.role === "tool" && m.tool_call_id === id);
+function pendingApproval() {
+  const last = [...agent.messages].reverse().find((m) => m.role === "assistant");
+  return last?.tool_calls?.find((c) => !hasResult(c.id) && agent.cards[c.id]?.status === "ask");
+}
+
+function renderChat() {
+  const box = $("chat");
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box.innerHTML = "";
+  if (!agent.messages.length) {
+    const e = document.createElement("div"); e.className = "empty";
+    e.textContent = "Tell the agent what to make. It writes the prompt, picks the settings and " + (confirmOn() ? "asks you before generating." : "starts it right away.");
+    box.append(e);
+  }
+  for (const m of agent.messages) {
+    if (m.role === "user") {
+      const b = document.createElement("div"); b.className = "bubble user";
+      b.textContent = m.content.split("\n").filter((l) => !l.startsWith("[Attached ")).join("\n").trim();
+      if (m.ui?.attachments?.length) {
+        const a = document.createElement("div"); a.className = "att";
+        for (const f of m.ui.attachments) { const el = document.createElement(f.kind === "video" ? "video" : "img"); el.src = f.url; el.title = f.name; a.append(el); }
+        b.append(a);
+      }
+      box.append(b);
+    } else if (m.role === "assistant") {
+      if (m.content) { const b = document.createElement("div"); b.className = "bubble bot"; b.textContent = m.content; box.append(b); }
+      for (const c of m.tool_calls || []) box.append(toolCard(c));
+    }
+  }
+  if (agent.error) {
+    const e = document.createElement("div"); e.className = "bubble err"; e.textContent = agent.error; box.append(e);
+  }
+  if (agentRunning) {
+    const t = document.createElement("div"); t.className = "thinking"; t.textContent = "Working..."; box.append(t);
+  } else if (canContinue()) {
+    const b = document.createElement("button"); b.className = "iconbtn"; b.style.alignSelf = "flex-start";
+    b.textContent = agent.error ? "Try again" : "Continue"; b.onclick = () => runAgent(); box.append(b);
+  }
+  $("agentSend").textContent = agentRunning ? "Stop" : "Send";
+  if (atBottom || agentRunning) box.scrollTop = box.scrollHeight;
+}
+
+// Unfinished work that isn't waiting on you (e.g. the page was reloaded mid-step).
+function canContinue() {
+  const last = agent.messages.at(-1);
+  if (!last || pendingApproval()) return false;
+  if (last.role === "user" || last.role === "tool") return true;
+  return last.role === "assistant" && (last.tool_calls || []).some((c) => !hasResult(c.id));
+}
+
+function toolCard(c) {
+  const args = parseArgs(c);
+  const card = agent.cards[c.id] || {};
+  const el = document.createElement("div"); el.className = "tool" + (card.status === "ask" ? " ask" : "");
+  const head = document.createElement("div"); head.className = "head";
+  const name = document.createElement("span"); name.textContent = TOOL_LABEL[c.function.name] || c.function.name;
+  const badge = document.createElement("span");
+  const st = { ask: ["queued", "needs approval"], running: ["processing", "running"], done: ["completed", "done"], declined: ["canceled", "declined"], error: ["failed", "failed"] }[card.status] || ["queued", "waiting"];
+  badge.className = "badge " + st[0]; badge.textContent = st[1];
+  head.append(name, badge); el.append(head);
+
+  if (SPENDS.has(c.function.name)) {
+    const isVideo = c.function.name === "generate_video";
+    const rows = [
+      ["Model", modelFor(c) || "default"],
+      ["Prompt", args.prompt],
+      isVideo ? ["Length", args.seconds ? args.seconds + " s" : "model default"] : ["Images", args.n || 1],
+      ["Aspect", args.aspect_ratio || "model default"],
+      ["Style", args.style], ["Seed", args.seed],
+      ["Reference", [args.reference_image, ...(args.reference_images || []), args.reference_video].filter(Boolean).join("\n")],
+    ].filter(([, v]) => v !== undefined && v !== null && v !== "");
+    const dl = document.createElement("dl");
+    for (const [k, v] of rows) { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = String(v); dl.append(dt, dd); }
+    el.append(dl);
+  } else if (Object.keys(args).length) {
+    const d = document.createElement("div"); d.className = "hint"; d.textContent = Object.entries(args).map(([k, v]) => k + ": " + v).join(", "); el.append(d);
+  }
+
+  if (card.status === "ask" && !agentRunning) {
+    const btns = document.createElement("div"); btns.className = "btns";
+    const no = document.createElement("button"); no.textContent = "Decline";
+    const yes = document.createElement("button"); yes.className = "yes"; yes.textContent = "Approve";
+    no.onclick = () => decide(c, false); yes.onclick = () => decide(c, true);
+    btns.append(no, yes); el.append(btns);
+  }
+  const r = card.result;
+  if (card.status === "error" && card.error) { const e = document.createElement("div"); e.className = "hint"; e.textContent = card.error; el.append(e); }
+  if (r?.files?.length) {
+    const g = document.createElement("div"); g.className = "gallery";
+    for (const f of r.files) { const a = document.createElement("a"); a.href = f.url; a.target = "_blank"; a.rel = "noopener"; const i = document.createElement("img"); i.src = f.url; i.loading = "lazy"; a.append(i); g.append(a); }
+    el.append(g);
+  }
+  if (r?.id && c.function.name === "generate_video") { const d = document.createElement("div"); d.className = "hint"; d.textContent = "Started " + r.id + ". It will show up in Your videos."; el.append(d); }
+  if (r?.url && c.function.name === "check_video") { const v = document.createElement("video"); v.src = r.url; v.controls = true; v.preload = "metadata"; el.append(v); }
+  return el;
+}
+
+function decide(c, approved) {
+  if (approved) agent.cards[c.id] = { ...agent.cards[c.id], status: "approved" };
+  else {
+    agent.cards[c.id] = { ...agent.cards[c.id], status: "declined" };
+    agent.messages.push({ role: "tool", tool_call_id: c.id, content: JSON.stringify({ declined: true, message: "The user declined this. Ask what they'd like to change." }) });
+  }
+  saveAgent();
+  runAgent();
+}
+
+async function runTool(c) {
+  const a = parseArgs(c);
+  const model = SPENDS.has(c.function.name) ? modelFor(c) : undefined;
+  const ik = "agent-" + c.id.replace(/[^\w-]/g, "").slice(-60); // same call, same key: a re-run after a reload can't double-charge
+  switch (c.function.name) {
+    case "generate_video": {
+      const r = await call("/api/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        model, prompt: a.prompt, seconds: a.seconds, aspect_ratio: a.aspect_ratio, seed: a.seed,
+        image: a.reference_image, video_url: a.reference_video, ntfy_topic: store.get("ntfy_topic"), idempotency_key: ik }) });
+      loadJobs(); loadBalance();
+      return { id: r.id, status: r.status, model: r.model };
+    }
+    case "generate_image": {
+      const pend = { id: ik, at: Date.now(), model, prompt: a.prompt, n: a.n || 1 };
+      savePending(PENDING_IMG, [pend, ...pendingList(PENDING_IMG)]);
+      loadImages();
+      try {
+        const r = await call("/api/generate-image", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+          model: pend.model, prompt: a.prompt, n: a.n, aspect_ratio: a.aspect_ratio, style: a.style,
+          images: a.reference_images, ntfy_topic: store.get("ntfy_topic"), idempotency_key: ik }) });
+        dropPending(PENDING_IMG, ik);
+        return { files: r.files.map((f) => ({ file_id: f.file_id, url: f.url })), cost_usd: r.cost_usd };
+      } catch (e) {
+        if (!(e instanceof TypeError)) dropPending(PENDING_IMG, ik);
+        throw e;
+      } finally { loadImages(); loadBalance(); }
+    }
+    case "check_video": {
+      const j = (await call("/api/jobs")).find((x) => x.id === a.id);
+      return j ? { id: j.id, status: j.status, error: j.error, url: j.url, prompt: j.prompt } : { error: "No recent video with that id." };
+    }
+    case "list_models": {
+      const kind = a.kind === "image" ? "image" : "video";
+      return (await call("/api/models?kind=" + kind)).map((m) => ({ id: m.id, name: m.name, about: (m.description || "").slice(0, 140) }));
+    }
+    case "get_balance": return await call("/api/balance");
+    default: return { error: "Unknown tool " + c.function.name };
+  }
+}
+// What the model sees from a result: image links are long and it doesn't need them.
+const forModel = (name, r) => (name === "generate_image" ? { file_ids: r.files.map((f) => f.file_id), cost_usd: r.cost_usd, shown_to_user: true } : r);
+
+async function runAgent() {
+  if (agentRunning) return;
+  agentRunning = true; agentStop = false; agent.error = "";
+  renderChat();
+  try {
+    for (let step = 0; step < AGENT_MAX_STEPS && !agentStop; ) {
+      const last = agent.messages.at(-1);
+      const open = last?.role === "assistant" ? (last.tool_calls || []).filter((c) => !hasResult(c.id)) : [];
+      if (open.length) {
+        // Run the requested tools in order; stop at the first one that needs approval.
+        const c = open[0];
+        const card = agent.cards[c.id] || {};
+        if (SPENDS.has(c.function.name) && confirmOn() && card.status !== "approved") {
+          agent.cards[c.id] = { status: "ask", model: modelFor(c) };
+          saveAgent();
+          return; // waits for Approve / Decline
+        }
+        agent.cards[c.id] = { status: "running", model: SPENDS.has(c.function.name) ? modelFor(c) : undefined }; saveAgent(); renderChat();
+        let content;
+        try {
+          const r = await runTool(c);
+          agent.cards[c.id] = { ...agent.cards[c.id], status: "done", result: r };
+          content = JSON.stringify(forModel(c.function.name, r));
+        } catch (e) {
+          if (e instanceof TypeError) throw e; // connection lost: leave it for Continue
+          agent.cards[c.id] = { ...agent.cards[c.id], status: "error", error: e.message };
+          content = JSON.stringify({ error: e.message });
+        }
+        agent.messages.push({ role: "tool", tool_call_id: c.id, content });
+        saveAgent(); renderChat();
+        continue;
+      }
+      if (!last || last.role === "assistant") break; // the model answered; wait for the user
+      step++;
+      const res = await call("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        model: agentModel(), tools: AGENT_TOOLS,
+        messages: [{ role: "system", content: systemPrompt() }, ...agent.messages.map(({ ui, ...m }) => m)] }) });
+      const m = res.choices?.[0]?.message;
+      if (!m) throw new Error("The model sent back an empty reply.");
+      agent.messages.push({ role: "assistant", content: m.content || null, ...(m.tool_calls?.length ? { tool_calls: m.tool_calls } : {}) });
+      saveAgent(); renderChat();
+    }
+  } catch (e) {
+    agent.error = e instanceof TypeError ? "Lost the connection. Press Try again to carry on." : e.message;
+  } finally {
+    agentRunning = false;
+    saveAgent(); renderChat();
+  }
+}
+
+function renderAgentAttachments() {
+  const box = $("agentAttachments");
+  box.textContent = agentUploading ? "Uploading..." : agentAttachments.map((f) => f.name).join(", ");
+  if (agentAttachments.length && !agentUploading) {
+    const x = document.createElement("button"); x.className = "dismiss"; x.style.marginLeft = "8px"; x.textContent = "Clear";
+    x.onclick = () => { agentAttachments.length = 0; renderAgentAttachments(); }; box.append(x);
+  }
+}
+$("agentAttach").addEventListener("click", () => $("agentFile").click());
+$("agentFile").addEventListener("change", async () => {
+  const files = [...$("agentFile").files]; $("agentFile").value = "";
+  for (const f of files) {
+    agentUploading++; renderAgentAttachments();
+    try {
+      const r = await call("/api/upload", { method: "POST", body: f, headers: { "content-type": f.type || "application/octet-stream", "x-filename": encodeURIComponent(f.name) } });
+      const kind = r.kind === "video" || f.type.startsWith("video/") ? "video" : "image";
+      // Images are passed by Vetta file id; videos need a link.
+      agentAttachments.push({ kind, value: kind === "video" ? r.url : r.file_id, url: r.url, name: f.name });
+    } catch (e) { agent.error = "Upload failed: " + e.message; renderChat(); }
+    finally { agentUploading--; renderAgentAttachments(); }
+  }
+});
+
+function sendAgent() {
+  if (agentRunning) { agentStop = true; return; }
+  if (!store.get("vetta_key")) return openSettings();
+  if (agentUploading) return;
+  const text = $("agentInput").value.trim();
+  if (!text && !agentAttachments.length) return;
+  // Writing instead of approving declines what's waiting, with this message as the reason.
+  const last = [...agent.messages].reverse().find((m) => m.role === "assistant");
+  for (const c of last?.tool_calls || []) {
+    if (hasResult(c.id)) continue;
+    agent.cards[c.id] = { status: "declined" };
+    agent.messages.push({ role: "tool", tool_call_id: c.id, content: JSON.stringify({ declined: true, message: "Not run: the user replied instead." }) });
+  }
+  const lines = agentAttachments.map((f) => `[Attached ${f.kind}: ${f.value}]`);
+  agent.messages.push({ role: "user", content: [text, ...lines].filter(Boolean).join("\n"),
+    ui: { attachments: agentAttachments.map(({ kind, url, name }) => ({ kind, url, name })) } });
+  agentAttachments.length = 0; renderAgentAttachments();
+  $("agentInput").value = "";
+  saveAgent();
+  runAgent();
+}
+$("agentSend").addEventListener("click", sendAgent);
+$("agentInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendAgent(); } });
+$("agentNew").addEventListener("click", () => {
+  if (agentRunning) return;
+  if (agent.messages.length && !confirm("Start a new chat? This one will be cleared.")) return;
+  agent = { messages: [], cards: {} }; saveAgent(); renderChat();
+});
+
 // ---- Tabs ----
 function setTab(tab) {
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
-  $("videoForm").hidden = $("videoList").hidden = tab !== "video";
-  $("imageForm").hidden = $("imageList").hidden = tab !== "image";
+  $("videoForm").hidden = tab !== "video";
+  $("imageForm").hidden = tab !== "image";
+  $("agentForm").hidden = tab !== "agent";
+  // The agent can make both, so its tab shows both lists.
+  $("videoList").hidden = tab === "image";
+  $("imageList").hidden = tab === "video";
   store.set("tab", tab);
 }
 document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
 // ---- Update log (website only; a copy opened as a local file doesn't show it) ----
 const UPDATES = [
+  { id: 7, date: "2026-10-23", title: "Agent", items: [
+    "New Agent tab: describe what you want and an AI agent writes the prompt, picks settings and makes the video or image for you.",
+    "Every generation waits for you to approve it. Turn off \"Ask me before generating\" to let the agent start them on its own.",
+    "Pick any Vetta chat model; the default is DeepSeek V4.1 Flash 1017. You can attach images or videos as references.",
+    "The chat is kept when you reload the page." ] },
   { id: 6, date: "2026-10-22", title: "Update log", items: [
     "This list. The Updates button shows a dot when there's something new." ] },
   { id: 5, date: "2026-10-22", title: "Nothing disappears on refresh", items: [
@@ -762,9 +1168,10 @@ async function init() {
     store.set("topic_set", "1");
   }
   if (!store.get("vetta_key")) { openSettings(); return; }
-  setTab(store.get("tab") === "image" ? "image" : "video");
+  setTab(["image", "agent"].includes(store.get("tab")) ? store.get("tab") : "video");
   loadBalance(); loadModels(); loadCharacters(); loadJobs();
   loadImgModels(); loadStyles(); loadImages();
+  loadLlmModels(); renderChat();
 }
 init();
 </script>
