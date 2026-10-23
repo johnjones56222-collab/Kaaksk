@@ -12,6 +12,7 @@ import PAGE from "./page.html";
 
 const VETTA = "https://api.vetta.sh/v1";
 const CHAT_PATH = "/proxy/openai/v1/chat/completions";
+const VANI = "https://api.vani.ai/v1";
 const MAX_JOBS_PER_RUN = 6; // keeps a cron run well under the subrequest limit
 const MAX_NOTIFY_ATTEMPTS = 30; // ~30 minutes of retries if ntfy keeps refusing
 const GIVE_UP_AFTER_MS = 3 * 60 * 60_000;
@@ -171,7 +172,64 @@ async function generateImage(env, ctx, key, b) {
   }
 }
 
+// Vani (api.vani.ai) is a second LLM provider for the Agent tab, used with the
+// Vani key the page sends in `x-vani-key`. Its model list is read live, so new
+// models appear on their own. Chat is streamed straight through, because Vani
+// only returns a model's thinking (reasoning_content) in streamed replies.
+async function vaniApi(req, path) {
+  const key = (req.headers.get("x-vani-key") || "").trim();
+  if (!key) return json({ error: "Add your Vani API key in Settings." }, 401);
+  const call = (p, init = {}) => fetch(VANI + p, { ...init, headers: { authorization: `Bearer ${key}`, "content-type": "application/json" } });
+  const fail = async (res) => {
+    const text = await res.text();
+    let msg = text.slice(0, 300);
+    try { msg = JSON.parse(text).error?.message || msg; } catch {}
+    return json({ error: `Vani: ${msg}` }, res.status);
+  };
+
+  if (path === "/api/vani/models") {
+    const res = await call("/models");
+    if (!res.ok) return fail(res);
+    const d = await res.json();
+    // `items` has the details; the "-fast" variants are only in `data` and
+    // share their base model's details (found through each item's `fast.slug`).
+    const info = new Map();
+    for (const i of d.items || []) {
+      info.set(i.slug, i);
+      if (i.fast?.slug) info.set(i.fast.slug, { ...i, display_name: `${i.display_name} (fast)`, estimated_remaining_tokens: i.fast.estimated_remaining_tokens });
+    }
+    const models = (d.data || []).map((m) => {
+      const i = info.get(m.id) || {};
+      return {
+        id: m.id,
+        name: i.display_name || m.id,
+        efforts: i.allowed_efforts || [],
+        vision: Boolean(i.supports_vision),
+        tier: i.tier || null,
+        remaining_tokens: i.estimated_remaining_tokens ?? null,
+      };
+    }).filter((m) => info.get(m.id)?.enabled !== false);
+    return json({ default_model: d.default_model || null, models });
+  }
+
+  if (path === "/api/vani/chat" && req.method === "POST") {
+    const b = await req.json();
+    const res = await call("/chat/completions", {
+      method: "POST",
+      body: JSON.stringify(strip({
+        model: b.model, messages: b.messages, tools: b.tools, stream: true,
+        max_tokens: Math.min(Number(b.max_tokens) || 8000, 16000), reasoning_effort: b.reasoning_effort,
+      })),
+    });
+    if (!res.ok) return fail(res);
+    return new Response(res.body, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+  }
+
+  return json({ error: "Not found" }, 404);
+}
+
 async function api(req, env, ctx, path) {
+  if (path.startsWith("/api/vani/")) return vaniApi(req, path);
   const key = (req.headers.get("x-vetta-key") || "").trim();
   if (!key.startsWith("sk_")) return json({ error: "Add your Vetta API key in Settings." }, 401);
 
@@ -353,7 +411,7 @@ async function checkJobs(env) {
 // Lets a copy of the page saved on your device (standalone.html) call this server.
 const CORS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-headers": "x-vetta-key, x-filename, content-type",
+  "access-control-allow-headers": "x-vetta-key, x-vani-key, x-filename, content-type",
   "access-control-allow-methods": "GET, POST, OPTIONS",
 };
 const withCors = (res) => {

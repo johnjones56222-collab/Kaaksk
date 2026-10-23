@@ -97,6 +97,13 @@
   .composer .line button.primary { width: auto; margin: 0; padding: 10px 18px; }
   .switch { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 0; color: var(--text); font-size: 14px; cursor: pointer; }
   .switch input { width: auto; accent-color: var(--accent); }
+  .think { align-self: flex-start; max-width: 88%; font-size: 13px; color: var(--muted); border-left: 2px solid var(--line); padding: 2px 0 2px 10px; }
+  .think summary { cursor: pointer; user-select: none; }
+  .think div { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 6px; max-height: 260px; overflow-y: auto; }
+  .modelline { display: flex; gap: 8px; }
+  .modelline select:first-child { flex: 1; min-width: 0; }
+  .modelline select#agentEffort { width: auto; }
+  @media (max-width: 520px) { .modelline { flex-wrap: wrap; } .modelline select#agentEffort { width: 100%; } }
   #openUpdates { position: relative; }
   #openUpdates .dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
   #updates { width: min(560px, calc(100vw - 32px)); }
@@ -258,8 +265,11 @@
       <button class="iconbtn" id="agentNew" style="text-transform:none;letter-spacing:0">New chat</button>
     </h2>
     <label for="agentModel" style="margin-top:0">Model</label>
-    <input id="agentModel" list="llmModels" autocomplete="off" spellcheck="false">
-    <datalist id="llmModels"></datalist>
+    <div class="modelline">
+      <select id="agentModel"><option>Loading models...</option></select>
+      <select id="agentEffort" title="How hard the model thinks" hidden></select>
+    </div>
+    <div class="hint" id="agentModelHint"></div>
     <label class="switch" style="padding-bottom:0"><input type="checkbox" id="agentConfirm" checked> Ask me before generating</label>
     <div class="hint" id="agentModeHint"></div>
     <div class="chat" id="chat"></div>
@@ -305,6 +315,12 @@
     <button class="iconbtn" id="toggleKey">Show</button>
   </div>
   <div class="hint">Saved only in this browser. It is sent with each request so the server can call Vetta for you.</div>
+  <label for="vaniKey">Vani API key (optional)</label>
+  <div class="keyline">
+    <input type="password" id="vaniKey" placeholder="vani_..." autocomplete="off">
+    <button class="iconbtn" id="toggleVaniKey">Show</button>
+  </div>
+  <div class="hint">Adds every Vani model to the Agent tab. Saved only in this browser.</div>
   <label for="topic">ntfy topic for notifications</label>
   <input type="text" id="topic" placeholder="your-ntfy-topic">
   <div class="hint">You get "ready" or "failed" for every video and image here, even if this page is closed. Leave empty for no notifications.</div>
@@ -731,12 +747,14 @@ $("generateImage").addEventListener("click", async () => {
 });
 
 // ---- Agent ----
-// An LLM (through Vetta's chat endpoint) that makes videos and images by
-// calling the same endpoints as the forms above. The loop runs in this page:
-// each step sends the conversation to /api/chat, then runs the tools the model
-// asked for. Generating spends credits, so those tools wait for Approve unless
-// "Ask me before generating" is off. The chat is kept in localStorage, so a reload
-// picks up where it was (a pending approval shows its buttons again).
+// An LLM that makes videos and images by calling the same endpoints as the
+// forms above. Models come from Vetta's chat endpoint (/api/chat) and, with a
+// Vani key, from Vani (/api/vani/chat, streamed so the model's thinking can be
+// shown). The loop runs in this page: each step sends the conversation to the
+// model, then runs the tools it asked for. Generating spends credits, so those
+// tools wait for Approve unless "Ask me before generating" is off. The chat is
+// kept in localStorage, so a reload picks up where it was (a pending approval
+// shows its buttons again).
 const AGENT_DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash-1017";
 const AGENT_MAX_STEPS = 8; // model calls per message, so a confused model can't loop forever
 const SPENDS = new Set(["generate_video", "generate_image"]);
@@ -782,7 +800,11 @@ const defaultModel = (kind) => kind === "video"
   : (imgModels.length ? $("imgModel").value : store.get("last_img_model") || "openai/gpt-image-2.5-sunburst");
 // A generation's model is fixed when it's first shown, so what you approve is what runs.
 const modelFor = (c) => parseArgs(c).model || agent.cards[c.id]?.model || defaultModel(c.function.name === "generate_video" ? "video" : "image");
-const agentModel = () => $("agentModel").value.trim() || AGENT_DEFAULT_MODEL;
+// Selected model: Vani ones are stored as "vani:<id>", Vetta ones as the plain id.
+const agentModel = () => (models_ready() ? $("agentModel").value : store.get("agent_model")) || AGENT_DEFAULT_MODEL;
+let vaniModels = []; // { id, name, efforts, vision, tier, remaining_tokens }
+const models_ready = () => $("agentModel").options.length > 1;
+const vaniInfo = (sel) => (sel.startsWith("vani:") ? vaniModels.find((m) => "vani:" + m.id === sel) : null);
 
 function systemPrompt() {
   return [
@@ -794,21 +816,49 @@ function systemPrompt() {
       ? "The user approves each generation first. If they decline, ask what to change."
       : "Auto mode is on: generations start without asking."),
     "- Files the user attached are listed in their message as image file ids (fil_...) or video links; use them as reference_image(s) or reference_video.",
-    "- Keep replies short and plain (no markdown tables). Reply in the user's language.",
+    "- Keep replies short. Write plain text: no markdown (no **bold**, headings or tables), since the chat shows it as typed. Reply in the user's language.",
   ].join("\n");
 }
 
+// Both lists are read live on every load, so new models show up by themselves.
 async function loadLlmModels() {
-  const input = $("agentModel");
-  input.value = store.get("agent_model") || AGENT_DEFAULT_MODEL;
-  try {
-    const ids = await call("/api/llm-models");
-    $("llmModels").innerHTML = "";
-    for (const id of ids) { const o = document.createElement("option"); o.value = id; $("llmModels").append(o); }
-  } catch {}
+  const sel = $("agentModel");
+  const vaniKey = store.get("vani_key");
+  const [vani, vetta] = await Promise.all([
+    vaniKey ? call("/api/vani/models", { headers: { "x-vani-key": vaniKey } }).catch((e) => ({ error: e.message })) : null,
+    call("/api/llm-models").catch(() => []),
+  ]);
+  vaniModels = vani?.models || [];
+  sel.innerHTML = "";
+  const group = (label, items) => {
+    const g = document.createElement("optgroup"); g.label = label;
+    for (const [value, text] of items) { const o = document.createElement("option"); o.value = value; o.textContent = text; g.append(o); }
+    sel.append(g);
+  };
+  if (vaniModels.length) group(`Vani (${vaniModels.length})`, vaniModels.map((m) => ["vani:" + m.id, m.name + (m.efforts.length ? "  · thinking" : "")]));
+  if (vetta.length) group(`Vetta (${vetta.length})`, vetta.map((id) => [id, id]));
+  const want = store.get("agent_model") || AGENT_DEFAULT_MODEL;
+  sel.value = [...sel.options].some((o) => o.value === want) ? want : AGENT_DEFAULT_MODEL;
+  if (!sel.value && sel.options.length) sel.selectedIndex = 0;
+  showModelInfo(vani?.error);
 }
-$("agentModel").addEventListener("change", () => store.set("agent_model", $("agentModel").value.trim()));
-$("agentModel").addEventListener("focus", (e) => e.target.select());
+function showModelInfo(vaniError) {
+  const m = vaniInfo(agentModel());
+  const eff = $("agentEffort");
+  eff.hidden = !m?.efforts.length;
+  if (m?.efforts.length) {
+    const saved = store.get("agent_effort");
+    eff.innerHTML = "";
+    for (const v of ["", ...m.efforts]) { const o = document.createElement("option"); o.value = v; o.textContent = v ? "Thinking: " + v.replace("_", " ") : "Thinking: default"; eff.append(o); }
+    eff.value = m.efforts.includes(saved) ? saved : "";
+  }
+  const tokens = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : Math.round(n / 1e3) + "k");
+  $("agentModelHint").textContent = vaniError ? "Couldn't load Vani models: " + vaniError
+    : m ? ["Vani", m.tier && m.tier + " tier", m.remaining_tokens != null && "about " + tokens(m.remaining_tokens) + " tokens left"].filter(Boolean).join(" · ")
+    : store.get("vani_key") ? "Vetta" : "Vetta · add a Vani key in Settings to use Vani models too";
+}
+$("agentModel").addEventListener("change", () => { store.set("agent_model", $("agentModel").value); showModelInfo(); });
+$("agentEffort").addEventListener("change", () => store.set("agent_effort", $("agentEffort").value));
 
 function showMode() {
   $("agentConfirm").checked = confirmOn();
@@ -852,12 +902,18 @@ function renderChat() {
       }
       box.append(b);
     } else if (m.role === "assistant") {
+      if (m.reasoning) box.append(thinkingBlock(m.reasoning, false));
       if (m.content) { const b = document.createElement("div"); b.className = "bubble bot"; b.textContent = m.content; box.append(b); }
       for (const c of m.tool_calls || []) box.append(toolCard(c));
     }
   }
   if (agent.error) {
     const e = document.createElement("div"); e.className = "bubble err"; e.textContent = agent.error; box.append(e);
+  }
+  if (agentRunning && live) {
+    live.thinkEl = thinkingBlock(live.reasoning, true); live.thinkEl.hidden = !live.reasoning;
+    live.textEl = document.createElement("div"); live.textEl.className = "bubble bot"; live.textEl.hidden = !live.content; live.textEl.textContent = live.content;
+    box.append(live.thinkEl, live.textEl);
   }
   if (agentRunning) {
     const t = document.createElement("div"); t.className = "thinking"; t.textContent = "Working..."; box.append(t);
@@ -867,6 +923,15 @@ function renderChat() {
   }
   $("agentSend").textContent = agentRunning ? "Stop" : "Send";
   if (atBottom || agentRunning) box.scrollTop = box.scrollHeight;
+}
+
+// The model's reasoning, when it shares it (Vani models such as GLM do).
+function thinkingBlock(text, open) {
+  const d = document.createElement("details"); d.className = "think"; d.open = open;
+  const s = document.createElement("summary"); s.textContent = open ? "Thinking..." : "View thinking";
+  const t = document.createElement("div"); t.textContent = text;
+  d.append(s, t);
+  return d;
 }
 
 // Unfinished work that isn't waiting on you (e.g. the page was reloaded mid-step).
@@ -973,6 +1038,69 @@ async function runTool(c) {
     default: return { error: "Unknown tool " + c.function.name };
   }
 }
+// The reply being streamed right now, shown live until it's saved as a message.
+let live = null;
+function updateLive() {
+  if (!live?.textEl) return;
+  live.thinkEl.hidden = !live.reasoning; live.thinkEl.querySelector("div").textContent = live.reasoning;
+  live.textEl.hidden = !live.content; live.textEl.textContent = live.content;
+  const box = $("chat"); box.scrollTop = box.scrollHeight;
+}
+// Only these fields go to the model; the rest (attachments, thinking) is for this page.
+const apiMessage = ({ role, content, tool_calls, tool_call_id }) =>
+  Object.fromEntries(Object.entries({ role, content, tool_calls, tool_call_id }).filter(([, v]) => v !== undefined));
+
+// One model call. Returns { content, tool_calls, reasoning }.
+async function chatStep(messages) {
+  const sel = agentModel();
+  if (!sel.startsWith("vani:")) {
+    const res = await call("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: sel, tools: AGENT_TOOLS, messages }) });
+    const m = res.choices?.[0]?.message;
+    if (!m) throw new Error("The model sent back an empty reply.");
+    return { content: m.content || null, tool_calls: m.tool_calls, reasoning: m.reasoning_content || m.reasoning || "" };
+  }
+  const m = vaniInfo(sel);
+  const effort = !$("agentEffort").hidden && $("agentEffort").value;
+  const res = await fetch((typeof API === "string" ? API : "") + "/api/vani/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-vetta-key": store.get("vetta_key"), "x-vani-key": store.get("vani_key") },
+    body: JSON.stringify({ model: sel.slice(5), tools: AGENT_TOOLS, messages, reasoning_effort: m?.efforts.includes(effort) ? effort : undefined }),
+  });
+  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `HTTP ${res.status}`); }
+  // Server-sent events: content, reasoning and tool calls arrive in pieces.
+  live = { content: "", reasoning: "" };
+  renderChat();
+  const calls = [];
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n"); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (!data || data === "[DONE]") continue;
+        const ev = JSON.parse(data);
+        if (ev.error) throw new Error("Vani: " + (ev.error.message || "stream failed"));
+        const d = ev.choices?.[0]?.delta || {};
+        if (d.content) live.content += d.content;
+        if (d.reasoning_content) live.reasoning += d.reasoning_content;
+        for (const t of d.tool_calls || []) {
+          const c = (calls[t.index ?? 0] ||= { id: "", type: "function", function: { name: "", arguments: "" } });
+          if (t.id) c.id = t.id;
+          if (t.function?.name) c.function.name += t.function.name;
+          if (t.function?.arguments) c.function.arguments += t.function.arguments;
+        }
+        updateLive();
+      }
+    }
+    return { content: live.content || null, tool_calls: calls.filter(Boolean), reasoning: live.reasoning };
+  } finally { live = null; }
+}
+
 // What the model sees from a result: image links are long and it doesn't need them.
 const forModel = (name, r) => (name === "generate_image" ? { file_ids: r.files.map((f) => f.file_id), cost_usd: r.cost_usd, shown_to_user: true } : r);
 
@@ -1010,12 +1138,9 @@ async function runAgent() {
       }
       if (!last || last.role === "assistant") break; // the model answered; wait for the user
       step++;
-      const res = await call("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
-        model: agentModel(), tools: AGENT_TOOLS,
-        messages: [{ role: "system", content: systemPrompt() }, ...agent.messages.map(({ ui, ...m }) => m)] }) });
-      const m = res.choices?.[0]?.message;
-      if (!m) throw new Error("The model sent back an empty reply.");
-      agent.messages.push({ role: "assistant", content: m.content || null, ...(m.tool_calls?.length ? { tool_calls: m.tool_calls } : {}) });
+      const m = await chatStep([{ role: "system", content: systemPrompt() }, ...agent.messages.map(apiMessage)]);
+      if (!m.content && !m.tool_calls?.length) throw new Error("The model sent back an empty reply.");
+      agent.messages.push({ role: "assistant", content: m.content, ...(m.tool_calls?.length ? { tool_calls: m.tool_calls } : {}), ...(m.reasoning ? { reasoning: m.reasoning } : {}) });
       saveAgent(); renderChat();
     }
   } catch (e) {
@@ -1093,6 +1218,10 @@ document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("cli
 
 // ---- Update log (website only; a copy opened as a local file doesn't show it) ----
 const UPDATES = [
+  { id: 8, date: "2026-10-23", title: "Vani models in the Agent tab", items: [
+    "Add your Vani API key in Settings and every Vani model appears in the Agent model list, next to Vetta's. New models show up automatically.",
+    "Models that think get a thinking level picker, and their thinking can be opened under \"View thinking\" (shown live while they work) when the model shares it.",
+    "The model line shows each Vani model's tier and roughly how many tokens you have left on it." ] },
   { id: 7, date: "2026-10-23", title: "Agent", items: [
     "New Agent tab: describe what you want and an AI agent writes the prompt, picks settings and makes the video or image for you.",
     "Every generation waits for you to approve it. Turn off \"Ask me before generating\" to let the agent start them on its own.",
@@ -1146,10 +1275,16 @@ if (location.protocol !== "file:") {
 function openSettings() {
   $("apiKey").value = store.get("vetta_key");
   $("topic").value = store.get("ntfy_topic");
+  $("vaniKey").value = store.get("vani_key");
   $("settings").showModal();
 }
 $("openSettings").addEventListener("click", openSettings);
 $("cancelSettings").addEventListener("click", () => $("settings").close());
+$("toggleVaniKey").addEventListener("click", () => {
+  const i = $("vaniKey");
+  i.type = i.type === "password" ? "text" : "password";
+  $("toggleVaniKey").textContent = i.type === "password" ? "Show" : "Hide";
+});
 $("toggleKey").addEventListener("click", () => {
   const i = $("apiKey");
   i.type = i.type === "password" ? "text" : "password";
@@ -1158,6 +1293,7 @@ $("toggleKey").addEventListener("click", () => {
 $("saveSettings").addEventListener("click", () => {
   store.set("vetta_key", $("apiKey").value.trim());
   store.set("ntfy_topic", $("topic").value.trim());
+  store.set("vani_key", $("vaniKey").value.trim());
   $("settings").close();
   init();
 });

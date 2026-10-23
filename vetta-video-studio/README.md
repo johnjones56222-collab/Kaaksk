@@ -21,6 +21,16 @@ https://vetta-video-studio.johnjones56222.workers.dev
   unless "Ask me before generating" is off. Each tool call's idempotency key
   comes from its call id, so re-running one after a reload can't double-charge.
   The chat is kept in localStorage.
+- With a Vani API key (Settings, kept in the browser and sent as
+  `x-vani-key`), every Vani model is added to the Agent model list, read live
+  from `api.vani.ai/v1/models` so new ones appear by themselves.
+  `/api/vani/chat` streams the reply through, because Vani only returns a
+  model's thinking (`reasoning_content`) when streaming. The page shows it under
+  "View thinking", live while the model works. Models that list
+  `allowed_efforts` get a thinking-level picker (`reasoning_effort`). Vani lists
+  `supports_vision` for many models, but its API accepts only text (Chat
+  Completions, Responses and Messages all reject image parts), so the agent
+  doesn't send images to it.
 - Reloading never loses work. The image list is read from the account's Vetta
   Files (`/api/images`), and the video list from its media jobs. A request
   still running is saved in the browser and shown as "generating"/"starting"
