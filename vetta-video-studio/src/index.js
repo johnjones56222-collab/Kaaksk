@@ -13,6 +13,7 @@ import PAGE from "./page.html";
 const VETTA = "https://api.vetta.sh/v1";
 const CHAT_PATH = "/proxy/openai/v1/chat/completions";
 const VANI = "https://api.vani.ai/v1";
+const CONTEXT = "https://api.context.dev/v1";
 const MAX_JOBS_PER_RUN = 6; // keeps a cron run well under the subrequest limit
 const MAX_NOTIFY_ATTEMPTS = 30; // ~30 minutes of retries if ntfy keeps refusing
 const GIVE_UP_AFTER_MS = 3 * 60 * 60_000;
@@ -228,8 +229,78 @@ async function vaniApi(req, path) {
   return json({ error: "Not found" }, 404);
 }
 
+// Context.dev gives the agent web research: search, reading pages, finding
+// images, news and brand details (logos, colors, slogan). Used with the key the
+// page sends in `x-context-key`. Results are trimmed here so they fit in the
+// model's context; credits_remaining comes back with each one.
+async function contextApi(req, path) {
+  const key = (req.headers.get("x-context-key") || "").trim();
+  if (!key) return json({ error: "Add your Context.dev API key in Settings." }, 401);
+  const b = await req.json().catch(() => ({}));
+  const post = async (p, body) => {
+    const res = await fetch(CONTEXT + p, { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new VettaError(res.status, `Context.dev: ${data.message || data.error?.message || `HTTP ${res.status}`}`);
+    return data;
+  };
+  const out = (data, result) => json({ ...result, credits_remaining: data.key_metadata?.credits_remaining ?? null });
+  const clip = (t, n) => (t && t.length > n ? t.slice(0, n) + "…" : t || "");
+
+  if (path === "/api/ctx/search") {
+    const d = await post("/web/search", strip({
+      query: b.query, numResults: 6, freshness: b.freshness,
+      highlightsOptions: { enabled: true, maxCharacters: 600 },
+    }));
+    return out(d, { results: (d.results || []).map((r) => ({
+      title: r.title, url: r.url, description: clip(r.description, 300),
+      highlights: (r.highlights?.highlights || []).join("\n"),
+    })) });
+  }
+
+  if (path === "/api/ctx/read") {
+    const d = await post("/web/scrape", { url: b.url, formats: { markdown: true } });
+    return out(d, { url: d.url, title: d.metadata?.title || null, image: d.metadata?.image || null, text: clip(d.markdown?.data, 8000) });
+  }
+
+  // Large images on a page. fileUrl is Context.dev's hosted copy, which loads
+  // even where the site blocks hotlinking.
+  if (path === "/api/ctx/images") {
+    const d = await post("/web/scrape", { url: b.url, formats: { images: true }, imageParams: { enrich: ["dimensions", "file"], dedupe: "visual" } });
+    const images = (d.images?.data || [])
+      .filter((i) => (i.width || 0) >= 300 && (i.height || 0) >= 200 && !/\.svg(\?|$)/i.test(i.url))
+      .sort((x, y) => y.width * y.height - x.width * x.height)
+      .slice(0, 12)
+      .map((i) => ({ url: i.fileUrl || i.url, source_url: i.url, alt: i.alt || null, width: i.width, height: i.height }));
+    return out(d, { page: b.url, title: d.metadata?.title || null, images });
+  }
+
+  if (path === "/api/ctx/news") {
+    const d = await post("/news/search", { searchBy: { type: "natural_language", query: b.query }, limit: 6 });
+    return out(d, { articles: (d.data || []).map((a) => ({
+      title: a.title, url: a.url, published_at: a.published_at, source: a.source?.name || null,
+      summary: clip(a.description, 300), image_url: a.image_url || null,
+    })) });
+  }
+
+  if (path === "/api/ctx/brand") {
+    const domain = (b.domain || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    const d = await post("/brand/retrieve", domain ? { type: "by_domain", domain, maxSpeed: true } : { type: "by_name", name: b.name, maxSpeed: true });
+    const br = d.brand || {};
+    return out(d, {
+      name: br.title || null, domain: br.domain || null, slogan: br.slogan || null, description: clip(br.description, 500),
+      colors: (br.colors || []).map((c) => ({ hex: c.hex, name: c.name })),
+      logos: (br.logos || []).map((l) => ({ url: l.url, type: l.type, background: l.mode })),
+      backdrops: (br.backdrops || []).map((x) => ({ url: x.url, width: x.resolution?.width, height: x.resolution?.height })),
+      industries: (br.industries?.eic || []).map((i) => i.subindustry || i.industry).slice(0, 4),
+    });
+  }
+
+  return json({ error: "Not found" }, 404);
+}
+
 async function api(req, env, ctx, path) {
   if (path.startsWith("/api/vani/")) return vaniApi(req, path);
+  if (path.startsWith("/api/ctx/")) return contextApi(req, path);
   const key = (req.headers.get("x-vetta-key") || "").trim();
   if (!key.startsWith("sk_")) return json({ error: "Add your Vetta API key in Settings." }, 401);
 
@@ -293,6 +364,14 @@ async function api(req, env, ctx, path) {
     const work = generateImage(env, ctx, key, b);
     ctx.waitUntil(work.catch(() => {}));
     return json(await work);
+  }
+
+  // Copies a public image or video link into Vetta Files, so a picture found on
+  // the web can be used as a reference even if its site later removes it.
+  if (path === "/api/import" && req.method === "POST") {
+    const b = await req.json();
+    const file = await vetta(key, "POST", "/files/imports", { json: { url: b.url }, headers: { "idempotency-key": crypto.randomUUID() } });
+    return json({ file_id: file.id, kind: file.kind, url: await cachedUrl(env, key, file.id) });
   }
 
   // LLMs for the Agent tab. Batch-only models can't answer a chat, so they're left out.
@@ -411,7 +490,7 @@ async function checkJobs(env) {
 // Lets a copy of the page saved on your device (standalone.html) call this server.
 const CORS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-headers": "x-vetta-key, x-vani-key, x-filename, content-type",
+  "access-control-allow-headers": "x-vetta-key, x-vani-key, x-context-key, x-filename, content-type",
   "access-control-allow-methods": "GET, POST, OPTIONS",
 };
 const withCors = (res) => {

@@ -100,6 +100,16 @@
   .think { align-self: flex-start; max-width: 88%; font-size: 13px; color: var(--muted); border-left: 2px solid var(--line); padding: 2px 0 2px 10px; }
   .think summary { cursor: pointer; user-select: none; }
   .think div { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 6px; max-height: 260px; overflow-y: auto; }
+  .tool .links { margin: 8px 0 0; padding-left: 18px; }
+  .tool .links li { margin: 3px 0; overflow-wrap: anywhere; }
+  .tool .links a { color: var(--accent); }
+  .tool .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin-top: 8px; }
+  .tool .thumbs a { position: relative; display: block; }
+  .tool .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: #000; display: block; }
+  .tool .thumbs span { position: absolute; left: 4px; top: 4px; font-size: 11px; background: rgba(0,0,0,.7); color: white; border-radius: 6px; padding: 0 5px; }
+  .tool .swatches { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .tool .swatches span { font-size: 11.5px; padding: 3px 8px 3px 22px; border-radius: 999px; border: 1px solid var(--line); position: relative; }
+  .tool .swatches span::before { content: ""; position: absolute; left: 5px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: var(--c); }
   .modelline { display: flex; gap: 8px; }
   .modelline select:first-child { flex: 1; min-width: 0; }
   .modelline select#agentEffort { width: auto; }
@@ -321,6 +331,12 @@
     <button class="iconbtn" id="toggleVaniKey">Show</button>
   </div>
   <div class="hint">Adds every Vani model to the Agent tab. Saved only in this browser.</div>
+  <label for="contextKey">Context.dev API key (optional)</label>
+  <div class="keyline">
+    <input type="password" id="contextKey" placeholder="ctxt_secret_..." autocomplete="off">
+    <button class="iconbtn" id="toggleContextKey">Show</button>
+  </div>
+  <div class="hint">Lets the agent search the web, read pages, find reference images, check the news and look up brands. Saved only in this browser.</div>
   <label for="topic">ntfy topic for notifications</label>
   <input type="text" id="topic" placeholder="your-ntfy-topic">
   <div class="hint">You get "ready" or "failed" for every video and image here, even if this page is closed. Leave empty for no notifications.</div>
@@ -781,7 +797,25 @@ const AGENT_TOOLS = [
   { name: "list_models", description: "List the available video or image models with short descriptions.",
     parameters: { type: "object", required: ["kind"], properties: { kind: { type: "string", enum: ["video", "image"] } } } },
   { name: "get_balance", description: "The user's Vetta credit balance in USD.", parameters: { type: "object", properties: {} } },
+  { name: "save_reference_image", description: "Copy an image link (e.g. one found with find_images or brand_lookup) into the user's Vetta files. Returns a file_id to pass as reference_image / reference_images. Do this before using any web image as a reference.",
+    parameters: { type: "object", required: ["url"], properties: { url: { type: "string" } } } },
 ].map((f) => ({ type: "function", function: f }));
+// Web research through Context.dev; offered only when its key is set.
+const RESEARCH_TOOLS = [
+  { name: "web_search", description: "Search the web. Returns titles, links and the passages most relevant to the query. Use for facts about real places, people, products or events, and for ideas (e.g. how a style or shot usually looks).",
+    parameters: { type: "object", required: ["query"], properties: {
+      query: { type: "string", description: "Search query; Google operators like site: work." },
+      freshness: { type: "string", enum: ["last_24_hours", "last_week", "last_month", "last_year"], description: "Only recent pages." } } } },
+  { name: "read_page", description: "Read a web page as text (first ~8000 characters).",
+    parameters: { type: "object", required: ["url"], properties: { url: { type: "string" } } } },
+  { name: "find_images", description: "List the large images on a web page (largest first), shown to the user as numbered thumbnails. Use to find a reference picture of a real place, object or person; then save_reference_image the one to use.",
+    parameters: { type: "object", required: ["url"], properties: { url: { type: "string" } } } },
+  { name: "search_news", description: "Recent news articles about a topic, for videos about current events.",
+    parameters: { type: "object", required: ["query"], properties: { query: { type: "string" } } } },
+  { name: "brand_lookup", description: "A company's name, slogan, description, brand colors, logos and backdrop images, for ads or branded videos.",
+    parameters: { type: "object", properties: { domain: { type: "string", description: "e.g. nike.com (preferred)" }, name: { type: "string", description: "Company name, if the domain is unknown." } } } },
+].map((f) => ({ type: "function", function: f }));
+const agentTools = () => (store.get("context_key") ? [...AGENT_TOOLS, ...RESEARCH_TOOLS] : AGENT_TOOLS);
 
 let agent = loadAgent();
 let agentRunning = false, agentStop = false;
@@ -816,6 +850,8 @@ function systemPrompt() {
       ? "The user approves each generation first. If they decline, ask what to change."
       : "Auto mode is on: generations start without asking."),
     "- Files the user attached are listed in their message as image file ids (fil_...) or video links; use them as reference_image(s) or reference_video.",
+    "- A web image (from find_images, brand_lookup or the user) must go through save_reference_image first; pass the file_id it returns. A video takes one reference image.",
+    ...(store.get("context_key") ? ["- You can research with web_search, read_page, find_images, search_news and brand_lookup. Use them when the video depends on something real (a place, landmark, product, brand, person, current event) or the user asks you to look something up or find a reference picture, so the prompt gets the details right. Don't research simple imaginative requests. Keep it to a few calls."] : []),
     "- Keep replies short. Write plain text: no markdown (no **bold**, headings or tables), since the chat shows it as typed. Reply in the user's language.",
   ].join("\n");
 }
@@ -874,7 +910,8 @@ $("agentConfirm").addEventListener("change", () => {
 });
 showMode();
 
-const TOOL_LABEL = { generate_video: "Make a video", generate_image: "Make images", check_video: "Check video", list_models: "List models", get_balance: "Check balance" };
+const TOOL_LABEL = { generate_video: "Make a video", generate_image: "Make images", check_video: "Check video", list_models: "List models", get_balance: "Check balance",
+  save_reference_image: "Save reference image", web_search: "Search the web", read_page: "Read page", find_images: "Find images", search_news: "Search news", brand_lookup: "Look up brand" };
 const parseArgs = (c) => { try { return JSON.parse(c.function.arguments || "{}"); } catch { return {}; } };
 const hasResult = (id) => agent.messages.some((m) => m.role === "tool" && m.tool_call_id === id);
 function pendingApproval() {
@@ -985,8 +1022,31 @@ function toolCard(c) {
     el.append(g);
   }
   if (r?.id && c.function.name === "generate_video") { const d = document.createElement("div"); d.className = "hint"; d.textContent = "Started " + r.id + ". It will show up in Your videos."; el.append(d); }
+  const preview = r && researchPreview(c.function.name, r);
+  if (preview) el.append(preview);
   if (r?.url && c.function.name === "check_video") { const v = document.createElement("video"); v.src = r.url; v.controls = true; v.preload = "metadata"; el.append(v); }
   return el;
+}
+
+// What research and reference results look like in their cards.
+function researchPreview(name, r) {
+  const box = document.createElement("div");
+  const link = (href, text) => { const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = text; return a; };
+  const list = (items) => { const ul = document.createElement("ol"); ul.className = "links"; for (const [href, text, extra] of items) { const li = document.createElement("li"); li.append(link(href, text)); if (extra) li.append(" · " + extra); ul.append(li); } return ul; };
+  const thumbs = (urls, numbered) => { const g = document.createElement("div"); g.className = "thumbs"; urls.forEach((u, i) => { const a = link(u, ""); const im = document.createElement("img"); im.src = u; im.loading = "lazy"; im.referrerPolicy = "no-referrer"; a.append(im); if (numbered) { const n = document.createElement("span"); n.textContent = i + 1; a.append(n); } g.append(a); }); return g; };
+  if (name === "web_search" && r.results?.length) box.append(list(r.results.map((x) => [x.url, x.title || x.url])));
+  else if (name === "search_news" && r.articles?.length) box.append(list(r.articles.map((x) => [x.url, x.title, [x.source, x.published_at && new Date(x.published_at).toLocaleDateString()].filter(Boolean).join(", ")])));
+  else if (name === "read_page" && r.url) box.append(list([[r.url, r.title || r.url]]));
+  else if (name === "find_images") { if (r.images?.length) box.append(thumbs(r.images.map((i) => i.url), true)); else { const h = document.createElement("div"); h.className = "hint"; h.textContent = "No large images on that page."; box.append(h); } }
+  else if (name === "brand_lookup") {
+    const h = document.createElement("div"); h.className = "hint"; h.textContent = [r.name, r.slogan].filter(Boolean).join(" · "); box.append(h);
+    if (r.colors?.length) { const sw = document.createElement("div"); sw.className = "swatches"; for (const col of r.colors) { const x = document.createElement("span"); x.style.setProperty("--c", col.hex); x.textContent = col.hex; x.title = col.name || ""; sw.append(x); } box.append(sw); }
+    const imgs = [...(r.logos || []), ...(r.backdrops || [])].map((x) => x.url);
+    if (imgs.length) box.append(thumbs(imgs, false));
+  } else if (name === "save_reference_image" && r.url) box.append(thumbs([r.url], false));
+  else return null;
+  if (r.credits_remaining != null) { const h = document.createElement("div"); h.className = "hint"; h.textContent = "Context.dev: " + Number(r.credits_remaining).toLocaleString() + " credits left"; box.append(h); }
+  return box;
 }
 
 function decide(c, approved) {
@@ -1035,6 +1095,15 @@ async function runTool(c) {
       return (await call("/api/models?kind=" + kind)).map((m) => ({ id: m.id, name: m.name, about: (m.description || "").slice(0, 140) }));
     }
     case "get_balance": return await call("/api/balance");
+    case "save_reference_image": {
+      const r = await call("/api/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: a.url }) });
+      return { file_id: r.file_id, kind: r.kind, url: r.url };
+    }
+    case "web_search": case "read_page": case "find_images": case "search_news": case "brand_lookup": {
+      if (!store.get("context_key")) return { error: "Web research is off: no Context.dev key in Settings." };
+      const route = { web_search: "search", read_page: "read", find_images: "images", search_news: "news", brand_lookup: "brand" }[c.function.name];
+      return await call("/api/ctx/" + route, { method: "POST", headers: { "content-type": "application/json", "x-context-key": store.get("context_key") }, body: JSON.stringify(a) });
+    }
     default: return { error: "Unknown tool " + c.function.name };
   }
 }
@@ -1054,7 +1123,7 @@ const apiMessage = ({ role, content, tool_calls, tool_call_id }) =>
 async function chatStep(messages) {
   const sel = agentModel();
   if (!sel.startsWith("vani:")) {
-    const res = await call("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: sel, tools: AGENT_TOOLS, messages }) });
+    const res = await call("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: sel, tools: agentTools(), messages }) });
     const m = res.choices?.[0]?.message;
     if (!m) throw new Error("The model sent back an empty reply.");
     return { content: m.content || null, tool_calls: m.tool_calls, reasoning: m.reasoning_content || m.reasoning || "" };
@@ -1064,7 +1133,7 @@ async function chatStep(messages) {
   const res = await fetch((typeof API === "string" ? API : "") + "/api/vani/chat", {
     method: "POST",
     headers: { "content-type": "application/json", "x-vetta-key": store.get("vetta_key"), "x-vani-key": store.get("vani_key") },
-    body: JSON.stringify({ model: sel.slice(5), tools: AGENT_TOOLS, messages, reasoning_effort: m?.efforts.includes(effort) ? effort : undefined }),
+    body: JSON.stringify({ model: sel.slice(5), tools: agentTools(), messages, reasoning_effort: m?.efforts.includes(effort) ? effort : undefined }),
   });
   if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `HTTP ${res.status}`); }
   // Server-sent events: content, reasoning and tool calls arrive in pieces.
@@ -1102,7 +1171,12 @@ async function chatStep(messages) {
 }
 
 // What the model sees from a result: image links are long and it doesn't need them.
-const forModel = (name, r) => (name === "generate_image" ? { file_ids: r.files.map((f) => f.file_id), cost_usd: r.cost_usd, shown_to_user: true } : r);
+const forModel = (name, r) => {
+  if (name === "generate_image") return { file_ids: r.files.map((f) => f.file_id), cost_usd: r.cost_usd, shown_to_user: true };
+  if (name === "find_images") return { ...r, images: r.images.map((i, n) => ({ number: n + 1, url: i.url, alt: i.alt, width: i.width, height: i.height })), shown_to_user: "as numbered thumbnails" };
+  if (name === "save_reference_image") return { file_id: r.file_id, kind: r.kind };
+  return r;
+};
 
 async function runAgent() {
   if (agentRunning) return;
@@ -1111,7 +1185,9 @@ async function runAgent() {
   try {
     for (let step = 0; step < AGENT_MAX_STEPS && !agentStop; ) {
       const last = agent.messages.at(-1);
-      const open = last?.role === "assistant" ? (last.tool_calls || []).filter((c) => !hasResult(c.id)) : [];
+      // Tool calls still to run from the model's latest turn (it can ask for several at once).
+      const turn = [...agent.messages].reverse().find((m) => m.role === "assistant");
+      const open = (turn?.tool_calls || []).filter((c) => !hasResult(c.id));
       if (open.length) {
         // Run the requested tools in order; stop at the first one that needs approval.
         const c = open[0];
@@ -1218,6 +1294,10 @@ document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("cli
 
 // ---- Update log (website only; a copy opened as a local file doesn't show it) ----
 const UPDATES = [
+  { id: 9, date: "2026-10-23", title: "The agent can research", items: [
+    "Add a Context.dev key in Settings and the agent can search the web, read pages, check the news and look up brands (logo, colors, slogan) to get real places, products and events right.",
+    "It can find pictures on a web page, show them as numbered thumbnails, and save the one you pick to use as a reference image.",
+    "Research steps run without asking; only making a video or image needs your approval." ] },
   { id: 8, date: "2026-10-23", title: "Vani models in the Agent tab", items: [
     "Add your Vani API key in Settings and every Vani model appears in the Agent model list, next to Vetta's. New models show up automatically.",
     "Models that think get a thinking level picker, and their thinking can be opened under \"View thinking\" (shown live while they work) when the model shares it.",
@@ -1276,10 +1356,16 @@ function openSettings() {
   $("apiKey").value = store.get("vetta_key");
   $("topic").value = store.get("ntfy_topic");
   $("vaniKey").value = store.get("vani_key");
+  $("contextKey").value = store.get("context_key");
   $("settings").showModal();
 }
 $("openSettings").addEventListener("click", openSettings);
 $("cancelSettings").addEventListener("click", () => $("settings").close());
+$("toggleContextKey").addEventListener("click", () => {
+  const i = $("contextKey");
+  i.type = i.type === "password" ? "text" : "password";
+  $("toggleContextKey").textContent = i.type === "password" ? "Show" : "Hide";
+});
 $("toggleVaniKey").addEventListener("click", () => {
   const i = $("vaniKey");
   i.type = i.type === "password" ? "text" : "password";
@@ -1294,6 +1380,7 @@ $("saveSettings").addEventListener("click", () => {
   store.set("vetta_key", $("apiKey").value.trim());
   store.set("ntfy_topic", $("topic").value.trim());
   store.set("vani_key", $("vaniKey").value.trim());
+  store.set("context_key", $("contextKey").value.trim());
   $("settings").close();
   init();
 });

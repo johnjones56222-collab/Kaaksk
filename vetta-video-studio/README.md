@@ -31,6 +31,14 @@ https://vetta-video-studio.johnjones56222.workers.dev
   `supports_vision` for many models, but its API accepts only text (Chat
   Completions, Responses and Messages all reject image parts), so the agent
   doesn't send images to it.
+- With a Context.dev key (Settings, sent as `x-context-key`), the agent can
+  research: `web_search` (with the passages that match the query),
+  `read_page`, `find_images` (large images on a page, shown as numbered
+  thumbnails), `search_news` and `brand_lookup` (logos, colors, slogan,
+  backdrops). The Worker's `/api/ctx/*` routes trim results so they fit in the
+  model's context. `save_reference_image` (always available) copies an image
+  link into Vetta Files (`/api/import`) so it can be a reference. Research runs
+  without approval; only generating does.
 - Reloading never loses work. The image list is read from the account's Vetta
   Files (`/api/images`), and the video list from its media jobs. A request
   still running is saved in the browser and shown as "generating"/"starting"
