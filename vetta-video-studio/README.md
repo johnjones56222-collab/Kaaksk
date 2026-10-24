@@ -39,6 +39,12 @@ https://vetta-video-studio.johnjones56222.workers.dev
   model's context. `save_reference_image` (always available) copies an image
   link into Vetta Files (`/api/import`) so it can be a reference. Research runs
   without approval; only generating does.
+- Archive: every video and image batch has Archive / Restore, and each list
+  has an Archive view. Archived ids (`med_` videos, `fil_` images) are kept in
+  KV under a hash of the API key (`archive:<hash>`), so the archive follows the
+  key across devices; nothing is deleted from Vetta. `/api/jobs` and
+  `/api/images` take `?view=active|archived|all` and read a wider page so
+  archived items don't push recent ones out.
 - Reloading never loses work. The image list is read from the account's Vetta
   Files (`/api/images`), and the video list from its media jobs. A request
   still running is saved in the browser and shown as "generating"/"starting"

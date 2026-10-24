@@ -298,6 +298,23 @@ async function contextApi(req, path) {
   return json({ error: "Not found" }, 404);
 }
 
+// Archived videos and images, per API key: the ids (med_ for videos, fil_ for
+// images) are kept in KV under a hash of the key, so the archive follows the
+// key to any device and nothing is deleted from Vetta.
+const ARCHIVE_MAX = 5000;
+async function archiveKey(key) {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  return "archive:" + [...new Uint8Array(hash)].slice(0, 16).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function getArchive(env, key) {
+  return new Set(JSON.parse((await env.KV.get(await archiveKey(key))) || "[]"));
+}
+// Which items a list shows: ?view=archived, ?view=all, or the active ones by default.
+function viewFilter(req, archived) {
+  const view = new URL(req.url).searchParams.get("view") || "active";
+  return (id) => view === "all" || (view === "archived") === archived.has(id);
+}
+
 async function api(req, env, ctx, path) {
   if (path.startsWith("/api/vani/")) return vaniApi(req, path);
   if (path.startsWith("/api/ctx/")) return contextApi(req, path);
@@ -391,22 +408,36 @@ async function api(req, env, ctx, path) {
     return json(res);
   }
 
-  // Images generated with this key, newest first, from Vetta Files.
+  // { ids: [...], archived: true|false } moves items into or out of the archive.
+  if (path === "/api/archive" && req.method === "POST") {
+    const b = await req.json();
+    const ids = (Array.isArray(b.ids) ? b.ids : []).filter((id) => /^(med|fil)_\w+$/.test(id));
+    const archived = await getArchive(env, key);
+    for (const id of ids) b.archived === false ? archived.delete(id) : archived.add(id);
+    await env.KV.put(await archiveKey(key), JSON.stringify([...archived].slice(-ARCHIVE_MAX)));
+    return json({ archived: archived.size });
+  }
+
+  // Images generated with this key, newest first, from Vetta Files. A wider
+  // page is read so archived ones don't push the newest out of the list.
   if (path === "/api/images") {
-    const page = await vetta(key, "GET", "/files?kind=image&source=image_generation&limit=30");
-    const files = await Promise.all(page.data.map(async (f) => ({
+    const [page, archived] = await Promise.all([vetta(key, "GET", "/files?kind=image&source=image_generation&limit=100"), getArchive(env, key)]);
+    const show = viewFilter(req, archived);
+    const files = await Promise.all(page.data.filter((f) => show(f.id)).slice(0, 60).map(async (f) => ({
       file_id: f.id,
       model: f.source?.model || null,
       prompt: f.source?.prompt || "",
       created_at: f.created_at,
       url: await cachedUrl(env, key, f.id).catch(() => null),
+      archived: archived.has(f.id),
     })));
     return json(files);
   }
 
   if (path === "/api/jobs") {
-    const page = await vetta(key, "GET", "/media?kind=video&limit=20");
-    const jobs = await Promise.all(page.data.map(async (j) => {
+    const [page, archived] = await Promise.all([vetta(key, "GET", "/media?kind=video&limit=60"), getArchive(env, key)]);
+    const show = viewFilter(req, archived);
+    const jobs = await Promise.all(page.data.filter((j) => show(j.id)).slice(0, 20).map(async (j) => {
       const fileId = j.result?.files?.[0]?.file_id;
       return {
         id: j.id,
@@ -417,7 +448,8 @@ async function api(req, env, ctx, path) {
         cost_usd: j.cost_micro_usd != null ? j.cost_micro_usd / 1e6 : null,
         error: j.error?.message || null,
         created_at: j.created_at,
-        url: j.status === "completed" && fileId ? await mintUrl(key, fileId).catch(() => null) : null,
+        url: j.status === "completed" && fileId ? await cachedUrl(env, key, fileId).catch(() => null) : null,
+        archived: archived.has(j.id),
       };
     }));
     return json(jobs);

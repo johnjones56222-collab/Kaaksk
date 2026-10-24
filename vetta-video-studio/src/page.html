@@ -68,6 +68,10 @@
   .gallery a img { width: 100%; border-radius: 10px; display: block; background: #000; }
   .gallery .ph { aspect-ratio: 1; border-radius: 10px; background: linear-gradient(90deg, var(--panel2), var(--line), var(--panel2)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
   @keyframes shimmer { to { background-position: -200% 0; } }
+  .listhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .listhead .btns { display: flex; gap: 6px; }
+  .listhead button { text-transform: none; letter-spacing: 0; }
+  .job .acts { display: flex; gap: 14px; align-items: center; margin-top: 8px; font-size: 13px; }
   .dismiss { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 13px; }
   .strength { display: flex; gap: 10px; align-items: center; }
   #videoList:not([hidden]) + #imageList:not([hidden]) { margin-top: 26px; }
@@ -297,15 +301,21 @@
 
   <section>
     <div id="videoList">
-    <h2 style="display:flex;justify-content:space-between;align-items:center">
-      <span>Your videos</span>
-      <button class="iconbtn" id="refreshJobs" style="text-transform:none;letter-spacing:0">Refresh</button>
+    <h2 class="listhead">
+      <span id="videoTitle">Your videos</span>
+      <span class="btns">
+        <button class="iconbtn" id="videoArchiveToggle" title="Show archived videos">Archive</button>
+        <button class="iconbtn" id="refreshJobs">Refresh</button>
+      </span>
     </h2>
     <div id="jobs" class="empty">Add your API key in Settings to see your videos.</div>
     </div>
     <div id="imageList" hidden>
-      <h2>Your images</h2>
-      <div class="hint" style="margin:-6px 0 10px">Your latest 30 images on this API key. Download links last about 7 days.</div>
+      <h2 class="listhead">
+        <span id="imageTitle">Your images</span>
+        <span class="btns"><button class="iconbtn" id="imageArchiveToggle" title="Show archived images">Archive</button></span>
+      </h2>
+      <div class="hint" id="imageHint" style="margin:-6px 0 10px">Your latest images on this API key. Download links last about 7 days.</div>
       <div id="images" class="empty">No images yet.</div>
     </div>
   </section>
@@ -527,7 +537,7 @@ function dropPending(k, id) { savePending(k, pendingList(k).filter((p) => p.id !
 const matches = (p, prompt, created) => prompt === p.prompt && Date.parse(created) > p.at - 60_000;
 const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? s + "s" : Math.floor(s / 60) + "m " + (s % 60) + "s"; };
 
-function entry({ meta, status, label, prompt, error, onDismiss }) {
+function entry({ meta, status, label, prompt, error, onDismiss, onArchive, archived }) {
   const el = document.createElement("div");
   el.className = "job";
   const top = document.createElement("div");
@@ -544,24 +554,63 @@ function entry({ meta, status, label, prompt, error, onDismiss }) {
   el.append(top, p);
   if (error) { const e = document.createElement("div"); e.className = "hint"; e.textContent = error; el.append(e); }
   if (onDismiss) { const d = document.createElement("button"); d.className = "dismiss"; d.textContent = "Dismiss"; d.onclick = onDismiss; el.append(d); }
+  if (onArchive) {
+    const acts = document.createElement("div"); acts.className = "acts";
+    const b = document.createElement("button"); b.className = "dismiss";
+    b.textContent = archived ? "Restore" : "Archive";
+    b.title = archived ? "Move back to your list" : "Move to the archive (nothing is deleted)";
+    b.onclick = () => { b.disabled = true; el.style.opacity = ".4"; onArchive(); };
+    acts.append(b); el.append(acts);
+  }
   return el;
 }
+
+// ---- Archive ----
+// Archived videos and images are hidden from the lists and kept under
+// "Archive". The server remembers them per API key; nothing is deleted.
+const views = { video: "active", image: "active" };
+async function setArchived(ids, archived, reload) {
+  try { await call("/api/archive", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids, archived }) }); }
+  catch (e) { alert("Couldn't update the archive: " + e.message); }
+  reload();
+}
+function toggleView(kind) {
+  views[kind] = views[kind] === "active" ? "archived" : "active";
+  const arch = views[kind] === "archived";
+  if (kind === "video") {
+    $("videoTitle").textContent = arch ? "Archived videos" : "Your videos";
+    $("videoArchiveToggle").textContent = arch ? "Back" : "Archive";
+    $("jobs").innerHTML = ""; $("jobs").className = "empty"; $("jobs").textContent = "Loading...";
+    loadJobs();
+  } else {
+    $("imageTitle").textContent = arch ? "Archived images" : "Your images";
+    $("imageArchiveToggle").textContent = arch ? "Back" : "Archive";
+    $("imageHint").textContent = arch ? "Images you archived. Restore puts them back in your list." : "Your latest images on this API key. Download links last about 7 days.";
+    $("images").innerHTML = ""; $("images").className = "empty"; $("images").textContent = "Loading...";
+    loadImages();
+  }
+}
+$("videoArchiveToggle").addEventListener("click", () => toggleView("video"));
+$("imageArchiveToggle").addEventListener("click", () => toggleView("image"));
 
 async function loadJobs() {
   const box = $("jobs");
   if (!store.get("vetta_key")) return;
   clearTimeout(pollTimer);
+  const arch = views.video === "archived";
   let jobs;
-  try { jobs = await call("/api/jobs"); }
+  try { jobs = await call("/api/jobs?view=" + views.video); }
   catch (e) { box.className = "empty"; box.textContent = "Could not load videos: " + e.message; pollTimer = setTimeout(loadJobs, 20000); return; }
+  if (arch !== (views.video === "archived")) return; // switched views while loading
 
   // Started requests whose job now exists are done; give up on ones Vetta never confirmed.
-  const pend = pendingList(PENDING_VID)
+  // (Only the main list can tell, so the archive view leaves them alone.)
+  const pend = arch ? [] : pendingList(PENDING_VID)
     .filter((p) => !jobs.some((j) => matches(p, j.prompt, j.created_at)))
     .map((p) => (!p.failed && Date.now() - p.at > 3 * 60_000 ? { ...p, failed: "Vetta never confirmed this video, so it probably did not start. Try again." } : p));
-  savePending(PENDING_VID, pend);
+  if (!arch) savePending(PENDING_VID, pend);
 
-  if (!jobs.length && !pend.length) { box.className = "empty"; box.textContent = "No videos yet."; return; }
+  if (!jobs.length && !pend.length) { box.className = "empty"; box.textContent = arch ? "No archived videos." : "No videos yet."; return; }
   box.className = "";
   box.innerHTML = "";
   for (const p of pend) {
@@ -575,14 +624,17 @@ async function loadJobs() {
     const el = entry({
       meta: new Date(j.created_at).toLocaleString() + " · " + j.model + (j.seconds ? " · " + j.seconds + "s" : "") + (j.cost_usd != null ? " · $" + j.cost_usd.toFixed(2) : ""),
       status: j.status, prompt: j.prompt, error: j.error,
+      archived: arch, onArchive: () => setArchived([j.id], !arch, loadJobs),
     });
     if (j.url) {
       const v = document.createElement("video");
       v.src = j.url; v.controls = true; v.preload = "metadata";
       const a = document.createElement("a");
       a.href = j.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Download";
-      el.append(v, a);
+      el.append(v);
+      el.querySelector(".acts").prepend(a); // Download next to Archive, under the video
     }
+    el.append(el.querySelector(".acts"));
     box.append(el);
   }
   const starting = pend.some((p) => !p.failed);
@@ -672,11 +724,13 @@ async function loadImages() {
   const box = $("images");
   if (!store.get("vetta_key")) return;
   clearTimeout(imgTimer);
+  const arch = views.image === "archived";
   let files = null, err = "";
-  try { files = await call("/api/images"); } catch (e) { err = e.message; }
+  try { files = await call("/api/images?view=" + views.image); } catch (e) { err = e.message; }
+  if (arch !== (views.image === "archived")) return; // switched views while loading
 
-  let pend = pendingList(PENDING_IMG);
-  if (files) {
+  let pend = arch ? [] : pendingList(PENDING_IMG);
+  if (files && !arch) {
     pend = pend
       .filter((p) => p.failed || !files.some((f) => matches(p, f.prompt, f.created_at)))
       .map((p) => (!p.failed && Date.now() - p.at > 10 * 60_000 ? { ...p, failed: "No image showed up after 10 minutes." } : p));
@@ -691,7 +745,7 @@ async function loadImages() {
     else groups.push({ prompt: f.prompt, model: f.model, files: [f] });
   }
 
-  if (!pend.length && !groups.length) { box.className = "empty"; box.textContent = err ? "Could not load images: " + err : "No images yet."; return; }
+  if (!pend.length && !groups.length) { box.className = "empty"; box.textContent = err ? "Could not load images: " + err : arch ? "No archived images." : "No images yet."; return; }
   box.className = ""; box.innerHTML = "";
   if (err) { const e = document.createElement("div"); e.className = "hint"; e.textContent = "Could not load images: " + err; box.append(e); }
   for (const p of pend) {
@@ -708,7 +762,8 @@ async function loadImages() {
     box.append(el);
   }
   for (const grp of groups) {
-    const el = entry({ meta: new Date(grp.files[0].created_at).toLocaleString() + " · " + (grp.model || "image"), status: "completed", prompt: grp.prompt });
+    const el = entry({ meta: new Date(grp.files[0].created_at).toLocaleString() + " · " + (grp.model || "image"), status: "completed", prompt: grp.prompt,
+      archived: arch, onArchive: () => setArchived(grp.files.map((f) => f.file_id), !arch, loadImages) });
     const g = document.createElement("div"); g.className = "gallery";
     for (const f of grp.files) {
       if (!f.url) continue;
@@ -716,7 +771,7 @@ async function loadImages() {
       const img = document.createElement("img"); img.src = f.url; img.loading = "lazy"; img.alt = grp.prompt;
       a.append(img); g.append(a);
     }
-    el.append(g); box.append(el);
+    el.append(g, el.querySelector(".acts")); box.append(el);
   }
   if (pend.some((p) => !p.failed)) imgTimer = setTimeout(loadImages, 5000);
 }
@@ -1087,7 +1142,7 @@ async function runTool(c) {
       } finally { loadImages(); loadBalance(); }
     }
     case "check_video": {
-      const j = (await call("/api/jobs")).find((x) => x.id === a.id);
+      const j = (await call("/api/jobs?view=all")).find((x) => x.id === a.id);
       return j ? { id: j.id, status: j.status, error: j.error, url: j.url, prompt: j.prompt } : { error: "No recent video with that id." };
     }
     case "list_models": {
@@ -1294,6 +1349,10 @@ document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("cli
 
 // ---- Update log (website only; a copy opened as a local file doesn't show it) ----
 const UPDATES = [
+  { id: 10, date: "2026-10-24", title: "Archive", items: [
+    "Every video and image now has an Archive link that moves it out of your list. Nothing is deleted.",
+    "The Archive button above each list shows what you archived, with Restore to bring it back.",
+    "The archive is saved with your API key, so it's the same on every device." ] },
   { id: 9, date: "2026-10-23", title: "The agent can research", items: [
     "Add a Context.dev key in Settings and the agent can search the web, read pages, check the news and look up brands (logo, colors, slogan) to get real places, products and events right.",
     "It can find pictures on a web page, show them as numbered thumbnails, and save the one you pick to use as a reference image.",
