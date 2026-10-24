@@ -45,6 +45,12 @@ https://vetta-video-studio.johnjones56222.workers.dev
   key across devices; nothing is deleted from Vetta. `/api/jobs` and
   `/api/images` take `?view=active|archived|all` and read a wider page so
   archived items don't push recent ones out.
+- Stuck videos: Vetta has no cancel for media jobs, and a job its provider
+  drops stays queued/processing forever. `/api/jobs` re-reads unfinished jobs
+  from the last day one by one (Vetta can advance jobs on read), and marks
+  any still unfinished an hour after it started as `stuck`. The page shows that
+  with an explanation and stops polling it. Stuck and failed videos get Try
+  again (resends the job's own model, prompt and settings) and Archive.
 - Reloading never loses work. The image list is read from the account's Vetta
   Files (`/api/images`), and the video list from its media jobs. A request
   still running is saved in the browser and shown as "generating"/"starting"

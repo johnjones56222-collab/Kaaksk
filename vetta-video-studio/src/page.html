@@ -50,6 +50,7 @@
   .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
   .badge.completed { color: var(--ok); } .badge.failed, .badge.canceled, .badge.cancelled { color: var(--bad); }
   .badge.queued, .badge.processing, .badge.running, .badge.starting, .badge.generating { color: var(--warn); }
+  .badge.stuck { color: var(--bad); border-style: dashed; }
   .job video { width: 100%; border-radius: 10px; margin-top: 8px; background: black; }
   .job a { color: var(--accent); }
   .empty { color: var(--muted); font-size: 14px; }
@@ -593,6 +594,29 @@ function toggleView(kind) {
 $("videoArchiveToggle").addEventListener("click", () => toggleView("video"));
 $("imageArchiveToggle").addEventListener("click", () => toggleView("image"));
 
+const since = (iso) => {
+  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  return m < 120 ? m + " minutes" : m < 2880 ? Math.round(m / 60) + " hours" : Math.round(m / 1440) + " days";
+};
+
+// Starts a stuck or failed video again with the same model, prompt and settings.
+async function retryVideo(j, btn) {
+  const what = `${j.retry.model}${j.retry.seconds ? ", " + j.retry.seconds + " s" : ""}`;
+  if (!confirm(`Start this video again (${what})? It costs credits like a new video.`)) return;
+  btn.disabled = true; btn.textContent = "Starting...";
+  const pend = { id: crypto.randomUUID(), at: Date.now(), model: j.retry.model, prompt: j.retry.prompt, seconds: j.retry.seconds };
+  savePending(PENDING_VID, [pend, ...pendingList(PENDING_VID)]);
+  try {
+    await call("/api/generate", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...j.retry, ntfy_topic: store.get("ntfy_topic"), idempotency_key: pend.id }) });
+    dropPending(PENDING_VID, pend.id);
+    loadBalance();
+  } catch (e) {
+    if (!(e instanceof TypeError)) { dropPending(PENDING_VID, pend.id); alert("Couldn't start it again: " + e.message); }
+  }
+  loadJobs();
+}
+
 async function loadJobs() {
   const box = $("jobs");
   if (!store.get("vetta_key")) return;
@@ -623,9 +647,16 @@ async function loadJobs() {
   for (const j of jobs) {
     const el = entry({
       meta: new Date(j.created_at).toLocaleString() + " · " + j.model + (j.seconds ? " · " + j.seconds + "s" : "") + (j.cost_usd != null ? " · $" + j.cost_usd.toFixed(2) : ""),
-      status: j.status, prompt: j.prompt, error: j.error,
+      status: j.stuck ? "stuck" : j.status, prompt: j.prompt,
+      error: j.stuck ? `Still ${j.status} ${since(j.created_at)} after it started. Vetta's video provider most likely dropped it; Vetta can't cancel it and hasn't charged for it. Try again, or archive it to clear it away.` : j.error,
       archived: arch, onArchive: () => setArchived([j.id], !arch, loadJobs),
     });
+    if (j.retry) {
+      const r = document.createElement("button"); r.className = "dismiss"; r.textContent = "Try again";
+      r.title = "Start the same video again (costs credits like a new video)";
+      r.onclick = () => retryVideo(j, r);
+      el.querySelector(".acts").prepend(r);
+    }
     if (j.url) {
       const v = document.createElement("video");
       v.src = j.url; v.controls = true; v.preload = "metadata";
@@ -638,7 +669,8 @@ async function loadJobs() {
     box.append(el);
   }
   const starting = pend.some((p) => !p.failed);
-  const pending = jobs.some((j) => ["queued", "processing", "running", "pending"].includes(j.status));
+  // Stuck jobs aren't polled: they won't finish, and the list re-checks them on every load anyway.
+  const pending = jobs.some((j) => !j.stuck && ["queued", "processing", "running", "pending"].includes(j.status));
   if (starting || pending) pollTimer = setTimeout(loadJobs, starting ? 5000 : 20000);
 }
 
@@ -1349,6 +1381,10 @@ document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("cli
 
 // ---- Update log (website only; a copy opened as a local file doesn't show it) ----
 const UPDATES = [
+  { id: 11, date: "2026-10-24", title: "No more videos queued forever", items: [
+    "A video that hasn't finished an hour after it started is now marked \"stuck\" with an explanation, instead of showing queued or processing forever. That happens when Vetta's video provider drops a job, which Vetta can't cancel (and doesn't charge for).",
+    "Stuck and failed videos have a Try again link that starts the same video again, plus Archive to clear them away.",
+    "Unfinished videos are re-checked one by one, so their status updates sooner." ] },
   { id: 10, date: "2026-10-24", title: "Archive", items: [
     "Every video and image now has an Archive link that moves it out of your list. Nothing is deleted.",
     "The Archive button above each list shows what you archived, with Restore to bring it back.",

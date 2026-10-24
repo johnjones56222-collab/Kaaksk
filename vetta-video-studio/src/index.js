@@ -17,6 +17,11 @@ const CONTEXT = "https://api.context.dev/v1";
 const MAX_JOBS_PER_RUN = 6; // keeps a cron run well under the subrequest limit
 const MAX_NOTIFY_ATTEMPTS = 30; // ~30 minutes of retries if ntfy keeps refusing
 const GIVE_UP_AFTER_MS = 3 * 60 * 60_000;
+// A video still queued or processing this long after it started is shown as
+// stuck: real renders take minutes (30 s Wan videos finished in 5-14), and
+// Vetta has no way to cancel a job its provider dropped.
+const STUCK_AFTER_MS = 60 * 60_000;
+const RUNNING = new Set(["queued", "processing", "running", "pending"]);
 
 class VettaError extends Error {
   constructor(status, message) {
@@ -437,8 +442,18 @@ async function api(req, env, ctx, path) {
   if (path === "/api/jobs") {
     const [page, archived] = await Promise.all([vetta(key, "GET", "/media?kind=video&limit=60"), getArchive(env, key)]);
     const show = viewFilter(req, archived);
-    const jobs = await Promise.all(page.data.filter((j) => show(j.id)).slice(0, 20).map(async (j) => {
+    const listed = page.data.filter((j) => show(j.id)).slice(0, 20);
+    // Unfinished jobs are re-read one by one (Vetta advances some jobs on read,
+    // so the list can lag), newest first and a few per request.
+    const fresh = await Promise.all(listed.map(async (j, i) => {
+      const young = Date.now() - Date.parse(j.created_at) < 24 * 3600_000;
+      if (!RUNNING.has(j.status) || !young || i >= 8) return j;
+      return vetta(key, "GET", `/media/${j.id}`).catch(() => j);
+    }));
+    const jobs = await Promise.all(fresh.map(async (j) => {
       const fileId = j.result?.files?.[0]?.file_id;
+      const stuck = RUNNING.has(j.status) && Date.now() - Date.parse(j.created_at) > STUCK_AFTER_MS;
+      const inp = j.input || {};
       return {
         id: j.id,
         status: j.status,
@@ -450,6 +465,12 @@ async function api(req, env, ctx, path) {
         created_at: j.created_at,
         url: j.status === "completed" && fileId ? await cachedUrl(env, key, fileId).catch(() => null) : null,
         archived: archived.has(j.id),
+        stuck,
+        // What "Try again" sends to /api/generate for a stuck or failed video.
+        retry: stuck || j.status === "failed" ? strip({
+          model: j.model, prompt: inp.prompt, seconds: inp.seconds, aspect_ratio: inp.aspect_ratio,
+          seed: inp.seed, character: inp.character, image: inp.image_urls?.[0], video_url: inp.video_url,
+        }) : null,
       };
     }));
     return json(jobs);
