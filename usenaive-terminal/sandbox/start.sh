@@ -17,7 +17,9 @@ while true; do
   CF=$!
   URL=""
   for _ in $(seq 60); do
-    URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$HOME/tunnel.log" | head -1)
+    # Quick tunnel names are hyphenated words; this skips https://api.trycloudflare.com,
+    # which cloudflared logs when a tunnel request fails (e.g. at boot, before the network is up).
+    URL=$(grep -oE 'https://[a-z0-9]+(-[a-z0-9]+)+\.trycloudflare\.com' "$HOME/tunnel.log" | head -1)
     [ -n "$URL" ] && break
     sleep 1
   done

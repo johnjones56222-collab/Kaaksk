@@ -26,7 +26,8 @@ export default {
     if (url.pathname === '/__register' && request.method === 'POST') {
       if (!isSandbox) return new Response('no', { status: 401 });
       const { url: tunnel, name } = await request.json();
-      if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(tunnel || '')) return new Response('bad url', { status: 400 });
+      // Quick tunnel names are hyphenated words, which rules out api.trycloudflare.com.
+      if (!/^https:\/\/[a-z0-9]+(-[a-z0-9]+)+\.trycloudflare\.com$/.test(tunnel || '')) return new Response('bad url', { status: 400 });
       if (name !== undefined && !/^[a-z0-9-]{1,40}$/.test(name)) return new Response('bad name', { status: 400 });
       const key = name ? 'node:' + name : 'tunnel_url';
       if ((await env.KV.get(key)) !== tunnel) await env.KV.put(key, tunnel);
