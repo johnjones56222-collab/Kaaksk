@@ -17,6 +17,12 @@ https://usenaive-terminal.johnjones56222.workers.dev
 - The same models work from the terminal: `llama-max` runs the server preset
   in the foreground and `llama-chat` chats with the model in the terminal.
 
+Other apps can use the model as an OpenAI-compatible API:
+`POST https://usenaive-terminal.johnjones56222.workers.dev/llm/v1/chat/completions`
+with `Authorization: Bearer <WEB_PASSWORD>` (CORS is open on `/llm/*` and
+`/api/llama/*`). The first request loads the model if it isn't running. Nexus
+v37.38 uses this for its "SANDBOX POWERED LLM" section (`sbx/` model ids).
+
 The whole site sits behind one password (`WEB_PASSWORD`). Anyone with it gets
 a full shell on the computer, so share it carefully.
 

@@ -26,8 +26,23 @@ function authed(req) {
   return cookie.split(/;\s*/).includes('ut_session=' + SESSION);
 }
 
+// Other apps (e.g. Nexus) call /llm/* and /api/llama/* from their own origin
+// with `Authorization: Bearer <WEB_PASSWORD>` instead of the cookie.
+const isApiPath = (p) => p.startsWith('/llm/') || p.startsWith('/api/llama/');
+function bearerOk(req) {
+  const got = Buffer.from(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''));
+  const want = Buffer.from(PASSWORD);
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+}
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'authorization, content-type',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-max-age': '86400',
+};
+
 function send(res, status, body, type = 'application/json') {
-  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' });
+  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', ...(res.cors ? CORS : {}) });
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
@@ -53,6 +68,28 @@ function llamaHealth() {
 
 function llamaRunning() {
   try { execSync('pgrep -f "llama-serve[r].*--port ' + LLM_PORT + '"'); return true; } catch { return false; }
+}
+
+function startLlama() {
+  if (llamaRunning()) return false;
+  const child = spawn('bash', [path.join(__dirname, 'llama-max.sh')], {
+    detached: true,
+    stdio: ['ignore', fs.openSync(LLAMA_LOG, 'w'), fs.openSync(LLAMA_LOG, 'a')],
+  });
+  child.unref();
+  return true;
+}
+
+// Chat requests start the model themselves, so callers never have to press
+// Start first. Loading takes a few seconds; give up after 90.
+async function ensureLlama() {
+  if ((await llamaHealth()) === 'ready') return true;
+  startLlama();
+  for (let i = 0; i < 90; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    if ((await llamaHealth()) === 'ready') return true;
+  }
+  return false;
 }
 
 function systemInfo() {
@@ -93,7 +130,11 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, fs.readFileSync(path.join(PUBLIC, 'index.html')), MIME['.html']);
   }
 
-  if (!authed(req)) return send(res, 401, { error: 'login required' });
+  if (isApiPath(url.pathname)) {
+    res.cors = true;
+    if (req.method === 'OPTIONS') { res.writeHead(204, CORS); return res.end(); }
+  }
+  if (!authed(req) && !(res.cors && bearerOk(req))) return send(res, 401, { error: 'login required' });
 
   if (url.pathname === '/api/me') return send(res, 200, { ok: true });
   if (url.pathname === '/api/system') return send(res, 200, systemInfo());
@@ -107,12 +148,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === '/api/llama/start' && req.method === 'POST') {
-    if (llamaRunning()) return send(res, 200, { started: false, status: await llamaHealth() });
-    const child = spawn('bash', [path.join(__dirname, 'llama-max.sh')], {
-      detached: true,
-      stdio: ['ignore', fs.openSync(LLAMA_LOG, 'w'), fs.openSync(LLAMA_LOG, 'a')],
-    });
-    child.unref();
+    if (!startLlama()) return send(res, 200, { started: false, status: await llamaHealth() });
     return send(res, 200, { started: true });
   }
 
@@ -123,12 +159,13 @@ const server = http.createServer(async (req, res) => {
 
   // Proxy /llm/* to llama-server (streams SSE straight through).
   if (url.pathname.startsWith('/llm/')) {
+    if (req.method === 'POST' && !(await ensureLlama())) return send(res, 503, { error: 'llama-server did not come up; see ~/llama.log on the sandbox' });
     const upstream = http.request({
       host: '127.0.0.1', port: LLM_PORT, method: req.method,
       path: url.pathname.slice(4) + url.search,
       headers: { 'content-type': req.headers['content-type'] || 'application/json' },
     }, (up) => {
-      res.writeHead(up.statusCode, { 'content-type': up.headers['content-type'] || 'application/json', 'cache-control': 'no-store', 'x-accel-buffering': 'no' });
+      res.writeHead(up.statusCode, { 'content-type': up.headers['content-type'] || 'application/json', 'cache-control': 'no-store', 'x-accel-buffering': 'no', ...CORS });
       up.pipe(res);
     });
     upstream.on('error', () => send(res, 503, { error: 'llama-server is not running — press "Start Llama 3.2 1B (Max)"' }));
