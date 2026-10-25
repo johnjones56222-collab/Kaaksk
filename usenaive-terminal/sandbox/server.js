@@ -14,18 +14,20 @@ const { WebSocketServer } = require('ws');
 const PORT = Number(process.env.PORT || 7860);
 // Requests pick a model by the `model` field (chat) or ?model= (status/start/
 // stop); anything else gets `standard`. The standard model runs here; each
-// uncensored one runs on its own Usenaive computer (a "node", see model-node/),
+// other one (uncensored, GPT-3.5 style) runs on its own Usenaive computer (a "node", see model-node/),
 // found through the Worker and called with MODEL_KEY.
 const MODELS = {
   standard: { id: 'llama-3.2-1b-instruct-f16', port: 8080, script: 'llama-max.sh', log: 'llama.log' },
   'uncensored-1b': { id: 'llama-3.2-1b-instruct-abliterated-f16', node: 'uncensored-1b' },
   'uncensored-3b': { id: 'llama-3.2-3b-instruct-abliterated-f16', node: 'uncensored-3b' },
   'uncensored-8b': { id: 'llama-3.1-8b-instruct-abliterated-bf16', node: 'uncensored-8b' },
+  'gpt35style-8b': { id: 'llama-3.1-8b-instruct-gpt35style-bf16', node: 'gpt35style-8b' },
 };
 MODELS.uncensored = MODELS['uncensored-1b']; // the page's old key
 const pickModel = (name) => {
   const n = String(name || '').toLowerCase();
   return Object.values(MODELS).find((m) => n === m.id || n.endsWith('/' + m.id)) || MODELS[n]
+    || (/gpt-?3\.?5|gpt35/.test(n) ? MODELS['gpt35style-8b'] : null)
     || (/abliterat|uncensor/.test(n) ? MODELS[/8b/.test(n) ? 'uncensored-8b' : /3b/.test(n) ? 'uncensored-3b' : 'uncensored-1b'] : MODELS.standard);
 };
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Keeps this node's llama-server and Cloudflare quick tunnel running, and
 # registers the tunnel URL with the Worker under NODE_NAME so the hub can
-# find it. llama-server only answers requests carrying MODEL_KEY.
+# find it. llama-server only answers requests carrying MODEL_KEY. LORA_FILE
+# (optional) is a GGUF LoRA adapter in ~/models applied on top of the model.
 set -a; . "$HOME/.llama-node.env"; set +a
 PORT=8080
 
@@ -12,7 +13,7 @@ PORT=8080
     --ctx-size $((131072 * PARALLEL)) --parallel "$PARALLEL" \
     --threads "$(nproc)" --threads-batch "$(nproc)" \
     --batch-size 4096 --ubatch-size 1024 \
-    --flash-attn on --jinja >> "$HOME/llama.log" 2>&1
+    --flash-attn on --jinja ${LORA_FILE:+--lora "$HOME/models/$LORA_FILE"} >> "$HOME/llama.log" 2>&1
   sleep 3
 done) &
 

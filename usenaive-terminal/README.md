@@ -23,6 +23,15 @@ https://usenaive-terminal.johnjones56222.workers.dev
   | [huihui-ai/Llama-3.2-1B-Instruct-abliterated](https://huggingface.co/huihui-ai/Llama-3.2-1B-Instruct-abliterated) | F16, 3.0 GB | 128K × 4 slots | `llama-1b-uncensored-max` |
   | [huihui-ai/Llama-3.2-3B-Instruct-abliterated](https://huggingface.co/huihui-ai/Llama-3.2-3B-Instruct-abliterated) | F16, 7.2 GB | 128K × 3 slots | `llama-3b-uncensored-max` |
   | [mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated](https://huggingface.co/mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated) | BF16, 16 GB | 128K × 2 slots | `llama-8b-uncensored-max` |
+  | Llama 3.1 8B Instruct + GPT-3.5 Turbo style LoRA (your fine-tune) | BF16, 16 GB + LoRA | 128K × 2 slots | `llama-8b-gpt35style-max` |
+
+  The GPT-3.5 style model is the fine-tune trained on `video-gen-max`
+  (`~/ft/adapter_final`: LoRA r16 / alpha 32 on q/k/v/o, 400 GPT-3.5 Turbo
+  answers from `trl-lib/ultrafeedback-gpt-3.5-turbo-helpfulness`). Its node
+  runs [unsloth/Llama-3.1-8B-Instruct-GGUF](https://huggingface.co/unsloth/Llama-3.1-8B-Instruct-GGUF)
+  BF16 (the same base weights) with the adapter converted by llama.cpp's
+  `convert_lora_to_gguf.py` and applied with `--lora` (`LORA_FILE` in the
+  node's env).
 
   Slots are as many full 128K contexts as fit in 64 GB next to the weights.
   The 8B streams at about 13-17 tok/s.
@@ -36,9 +45,10 @@ Other apps can use the model as an OpenAI-compatible API:
 with `Authorization: Bearer <WEB_PASSWORD>` (CORS is open on `/llm/*` and
 `/api/llama/*`). The `model` field picks one of `llama-3.2-1b-instruct-f16`,
 `llama-3.2-1b-instruct-abliterated-f16`, `llama-3.2-3b-instruct-abliterated-f16`
-or `llama-3.1-8b-instruct-abliterated-bf16` (`GET /llm/v1/models` lists them).
+`llama-3.1-8b-instruct-abliterated-bf16` or `llama-3.1-8b-instruct-gpt35style-bf16`
+(`GET /llm/v1/models` lists them).
 The standard model loads on the first request; the nodes keep theirs loaded.
-Nexus v37.40 uses this for its "SANDBOX POWERED LLM" section (`sbx/` ids).
+Nexus v37.41 uses this for its "SANDBOX POWERED LLM" section (`sbx/` ids).
 
 The whole site sits behind one password (`WEB_PASSWORD`). Anyone with it gets
 a full shell on the computer, so share it carefully.
@@ -129,6 +139,7 @@ ALIAS=llama-3.1-8b-instruct-abliterated-bf16 # the API model id
 MODEL_FILE=Meta-Llama-3.1-8B-Instruct-abliterated-bf16.gguf
 MODEL_URL=https://huggingface.co/mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated-GGUF/resolve/main/meta-llama-3.1-8b-instruct-abliterated.bf16.gguf
 PARALLEL=2                                   # 128K-token slots
+# LORA_FILE=adapter.gguf                     # optional LoRA in ~/models
 MODEL_KEY=...                                # same as the hub's
 WORKER_URL=https://usenaive-terminal.johnjones56222.workers.dev
 REGISTER_SECRET=...

@@ -109,13 +109,14 @@
       <aside class="side">
         <div class="card">
           <h3>Preset · Llama (Max)</h3>
-          <p>Meta's Llama 3.1 / 3.2 models at full precision, run with llama.cpp on every core.</p>
+          <p>Meta's Llama 3.1 / 3.2 models at full precision (plus your GPT-3.5-style fine-tune), run with llama.cpp on every core.</p>
           <label for="llm-model">Model</label>
           <select id="llm-model" style="width:100%;margin-bottom:10px;font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px">
             <option value="standard">Llama 3.2 1B Instruct (standard)</option>
             <option value="uncensored-1b">Llama 3.2 1B Instruct Abliterated (uncensored)</option>
             <option value="uncensored-3b">Llama 3.2 3B Instruct Abliterated (uncensored)</option>
             <option value="uncensored-8b">Llama 3.1 8B Instruct Abliterated (uncensored)</option>
+            <option value="gpt35style-8b">Llama 3.1 8B Instruct · GPT-3.5 Turbo style (your fine-tune)</option>
           </select>
           <p id="llm-model-note"></p>
           <div class="kv">
@@ -225,7 +226,9 @@ const MODELS = {
   'uncensored-3b': { id: 'llama-3.2-3b-instruct-abliterated-f16', weights: 'F16 (full precision, 7.2 GB)', node: true, slots: 3,
     note: 'huihui-ai\'s abliterated Llama 3.2 3B: smarter than 1B, refusals removed.' },
   'uncensored-8b': { id: 'llama-3.1-8b-instruct-abliterated-bf16', weights: 'BF16 (full precision, 16 GB)', node: true, slots: 2,
-    note: 'mlabonne\'s abliterated Llama 3.1 8B: the strongest of the four, refusals removed.' },
+    note: 'mlabonne\'s abliterated Llama 3.1 8B: the strongest uncensored model, refusals removed.' },
+  'gpt35style-8b': { id: 'llama-3.1-8b-instruct-gpt35style-bf16', weights: 'BF16 (16 GB) + your LoRA (r16)', node: true, slots: 2,
+    note: 'Your fine-tune: Llama 3.1 8B Instruct with a LoRA trained on 400 GPT-3.5 Turbo answers, so it writes in GPT-3.5 Turbo\'s style. Standard (not uncensored) base.' },
 };
 let llmKey = store.get('llm-model', 'standard');
 if (llmKey === 'uncensored') llmKey = 'uncensored-1b';
