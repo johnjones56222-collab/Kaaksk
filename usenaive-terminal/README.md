@@ -13,14 +13,22 @@ https://usenaive-terminal.johnjones56222.workers.dev
   4 parallel slots, all 16 threads, and batch 4096 / ubatch 1024. A chat window
   then streams replies (about 35 tok/s), with a system prompt, temperature and
   max tokens. The chat is kept in the browser.
+- A model picker switches between the standard model and an **uncensored**
+  one: [huihui-ai/Llama-3.2-1B-Instruct-abliterated](https://huggingface.co/huihui-ai/Llama-3.2-1B-Instruct-abliterated)
+  (the same model with its refusal behaviour removed), F16 GGUF from
+  mradermacher, with the same max settings. Each runs in its own llama-server
+  (standard on port 8080, uncensored on 8081); both fit in RAM at once.
 - **System**: CPU, RAM, disk, load and uptime.
 - The same models work from the terminal: `llama-max` runs the server preset
-  in the foreground and `llama-chat` chats with the model in the terminal.
+  in the foreground and `llama-chat` chats with the model in the terminal
+  (`llama-max-uncensored` and `llama-chat --uncensored` for the other model).
 
 Other apps can use the model as an OpenAI-compatible API:
 `POST https://usenaive-terminal.johnjones56222.workers.dev/llm/v1/chat/completions`
 with `Authorization: Bearer <WEB_PASSWORD>` (CORS is open on `/llm/*` and
-`/api/llama/*`). The first request loads the model if it isn't running. Nexus
+`/api/llama/*`). The `model` field picks `llama-3.2-1b-instruct-f16` or
+`llama-3.2-1b-instruct-abliterated-f16` (`GET /llm/v1/models` lists them), and
+the first request loads that model if it isn't running. Nexus
 v37.38 uses this for its "SANDBOX POWERED LLM" section (`sbx/` model ids).
 
 The whole site sits behind one password (`WEB_PASSWORD`). Anyone with it gets
@@ -51,6 +59,7 @@ changes. When the computer is paused, the Worker shows an "offline" page.
 - `sandbox/server.js`: web server, terminal, llama controls and proxy.
 - `sandbox/public/index.html`: the page.
 - `sandbox/llama-max.sh`: the max preset (also `/usr/local/bin/llama-max`).
+- `sandbox/llama-max-uncensored.sh`: the same preset with the abliterated model.
 - `sandbox/llama-chat.sh`: terminal chat (also `/usr/local/bin/llama-chat`).
 - `sandbox/start.sh`: keeps the server and tunnel running and registers the URL.
 - `worker/`: the Cloudflare Worker (KV binding `KV`, secret `REGISTER_SECRET`).
@@ -66,11 +75,14 @@ cd ~/llama.cpp && cmake -B build -DGGML_NATIVE=ON -DLLAMA_CURL=OFF -DCMAKE_BUILD
   && cmake --build build -j16 --target llama-server llama-cli
 mkdir -p ~/models && curl -fL -o ~/models/Llama-3.2-1B-Instruct-f16.gguf \
   https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-f16.gguf
+curl -fL -o ~/models/Llama-3.2-1B-Instruct-abliterated-f16.gguf \
+  https://huggingface.co/mradermacher/Llama-3.2-1B-Instruct-abliterated-GGUF/resolve/main/Llama-3.2-1B-Instruct-abliterated.f16.gguf
 curl -fsSL -o /tmp/cf.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb \
   && sudo dpkg -i /tmp/cf.deb
 # copy sandbox/ to ~/usenaive-terminal, then:
 cd ~/usenaive-terminal && npm install --omit=dev
 sudo ln -sf ~/usenaive-terminal/llama-max.sh /usr/local/bin/llama-max
+sudo ln -sf ~/usenaive-terminal/llama-max-uncensored.sh /usr/local/bin/llama-max-uncensored
 sudo ln -sf ~/usenaive-terminal/llama-chat.sh /usr/local/bin/llama-chat
 cat > ~/.usenaive-terminal.env <<EOF
 WEB_PASSWORD=...
@@ -82,4 +94,4 @@ setsid nohup ./start.sh > ~/start.log 2>&1 < /dev/null &
 ```
 
 After the computer restarts or resumes, run the last line again. Logs:
-`~/web.log`, `~/tunnel.log`, `~/llama.log`.
+`~/web.log`, `~/tunnel.log`, `~/llama.log`, `~/llama-uncensored.log`.

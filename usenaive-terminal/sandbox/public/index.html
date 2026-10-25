@@ -110,15 +110,21 @@
         <div class="card">
           <h3>Preset · Llama 3.2 1B Instruct (Max)</h3>
           <p>Meta's Llama 3 family at 1B parameters, run with llama.cpp on every core.</p>
+          <label for="llm-model">Model</label>
+          <select id="llm-model" style="width:100%;margin-bottom:10px;font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px">
+            <option value="standard">Llama 3.2 1B Instruct (standard)</option>
+            <option value="uncensored">Llama 3.2 1B Instruct Abliterated (uncensored)</option>
+          </select>
+          <p id="llm-model-note"></p>
           <div class="kv">
-            <span>Weights</span><b>F16 (full precision, 2.5 GB)</b>
+            <span>Weights</span><b id="llm-weights">F16 (full precision, 2.5 GB)</b>
             <span>Context</span><b>131,072 tokens × 4 slots</b>
             <span>Threads</span><b id="threads">all cores</b>
             <span>Batch</span><b>4096 / ubatch 1024</b>
             <span>Status</span><b><span class="dot" id="llm-dot"></span> <span id="llm-state">checking</span></b>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="primary" id="llm-start">Start Llama 3.2 1B (Max)</button>
+            <button class="primary" id="llm-start">Start (Max)</button>
             <button id="llm-stop">Stop</button>
           </div>
           <pre class="log" id="llm-log" hidden></pre>
@@ -208,10 +214,25 @@ window.addEventListener('resize', () => { if ($('term-tab').classList.contains('
 $('term-reconnect').onclick = connectTerm;
 
 // ---------- llama ----------
+const MODELS = {
+  standard: { id: 'llama-3.2-1b-instruct-f16', weights: 'F16 (full precision, 2.5 GB)',
+    note: 'Meta\'s official instruct model, with its built-in safety refusals.' },
+  uncensored: { id: 'llama-3.2-1b-instruct-abliterated-f16', weights: 'F16 (full precision, 3.0 GB)',
+    note: 'huihui-ai\'s abliterated version: the same model with its refusal behaviour removed, so it stays in character and rarely says no.' },
+};
+let llmKey = store.get('llm-model', 'standard');
+if (!MODELS[llmKey]) llmKey = 'standard';
+$('llm-model').value = llmKey;
+function showModel() {
+  $('llm-weights').textContent = MODELS[llmKey].weights;
+  $('llm-model-note').textContent = MODELS[llmKey].note;
+}
+showModel();
+$('llm-model').onchange = () => { llmKey = $('llm-model').value; store.set('llm-model', llmKey); showModel(); pollLlama(); };
 let llmStatus = 'stopped', pollTimer;
 async function pollLlama() {
   try {
-    const r = await fetch('/api/llama/status');
+    const r = await fetch('/api/llama/status?model=' + llmKey);
     const j = await r.json();
     llmStatus = j.status;
     $('llm-dot').className = 'dot ' + ({ ready: 'ok', loading: 'warn', stopped: 'bad' }[j.status] || '');
@@ -226,10 +247,10 @@ async function pollLlama() {
 }
 $('llm-start').onclick = async () => {
   $('llm-start').disabled = true;
-  await fetch('/api/llama/start', { method: 'POST' });
+  await fetch('/api/llama/start?model=' + llmKey, { method: 'POST' });
   pollLlama();
 };
-$('llm-stop').onclick = async () => { await fetch('/api/llama/stop', { method: 'POST' }); pollLlama(); };
+$('llm-stop').onclick = async () => { await fetch('/api/llama/stop?model=' + llmKey, { method: 'POST' }); pollLlama(); };
 
 // ---------- chat ----------
 let history = store.get('chat', []);
@@ -242,7 +263,7 @@ function render() {
   const box = $('msgs');
   box.innerHTML = '';
   if (!history.length) {
-    box.innerHTML = '<div class="empty"><h3 style="color:var(--text)">Talk to Llama 3.2 1B</h3>Press <b>Start Llama 3.2 1B (Max)</b>, wait for "running", then type below. It runs entirely on this sandbox.</div>';
+    box.innerHTML = '<div class="empty"><h3 style="color:var(--text)">Talk to Llama 3.2 1B</h3>Pick a model, press <b>Start (Max)</b>, wait for "running", then type below. It runs entirely on this sandbox.</div>';
     return;
   }
   for (const m of history) {
@@ -262,7 +283,7 @@ $('composer').onsubmit = async (e) => {
   const text = $('input').value.trim();
   if (!text || busy) return;
   if (llmStatus !== 'ready') {
-    if (llmStatus === 'stopped') { await fetch('/api/llama/start', { method: 'POST' }); pollLlama(); }
+    if (llmStatus === 'stopped') { await fetch('/api/llama/start?model=' + llmKey, { method: 'POST' }); pollLlama(); }
     history.push({ role: 'assistant', content: 'Llama is starting up — send your message again once the status says "running".' });
     render();
     return;
@@ -280,7 +301,7 @@ $('composer').onsubmit = async (e) => {
   try {
     const r = await fetch('/llm/v1/chat/completions', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'llama-3.2-1b-instruct-f16', messages, stream: true,
+      body: JSON.stringify({ model: MODELS[llmKey].id, messages, stream: true,
         temperature: Number($('temp').value), max_tokens: Number($('maxtok').value) }),
     });
     if (!r.ok) throw new Error((await r.text()).slice(0, 300));

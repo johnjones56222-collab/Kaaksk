@@ -11,11 +11,20 @@ const pty = require('node-pty');
 const { WebSocketServer } = require('ws');
 
 const PORT = Number(process.env.PORT || 7860);
-const LLM_PORT = Number(process.env.LLM_PORT || 8080);
+// Each model runs in its own llama-server. Requests pick one by the `model`
+// field (chat) or ?model= (status/start/stop); anything else gets `standard`.
+const MODELS = {
+  standard: { id: 'llama-3.2-1b-instruct-f16', port: 8080, script: 'llama-max.sh', log: 'llama.log' },
+  uncensored: { id: 'llama-3.2-1b-instruct-abliterated-f16', port: 8081, script: 'llama-max-uncensored.sh', log: 'llama-uncensored.log' },
+};
+const pickModel = (name) => {
+  const n = String(name || '').toLowerCase();
+  return Object.values(MODELS).find((m) => n === m.id || n.endsWith('/' + m.id))
+    || (MODELS[n] || (/abliterat|uncensor/.test(n) ? MODELS.uncensored : MODELS.standard));
+};
 const PASSWORD = process.env.WEB_PASSWORD;
 if (!PASSWORD) throw new Error('WEB_PASSWORD is not set');
 const HOME = os.homedir();
-const LLAMA_LOG = path.join(HOME, 'llama.log');
 const PUBLIC = path.join(__dirname, 'public');
 
 // Session cookie is an HMAC of the password, so it survives restarts.
@@ -46,17 +55,17 @@ function send(res, status, body, type = 'application/json') {
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
-function readBody(req) {
+function readBody(req, limit = 1e6) {
   return new Promise((resolve) => {
     let data = '';
-    req.on('data', (c) => { data += c; if (data.length > 1e6) req.destroy(); });
+    req.on('data', (c) => { data += c; if (data.length > limit) req.destroy(); });
     req.on('end', () => resolve(data));
   });
 }
 
-function llamaHealth() {
+function llamaHealth(m) {
   return new Promise((resolve) => {
-    const r = http.get({ host: '127.0.0.1', port: LLM_PORT, path: '/health', timeout: 1500 }, (res) => {
+    const r = http.get({ host: '127.0.0.1', port: m.port, path: '/health', timeout: 1500 }, (res) => {
       let d = '';
       res.on('data', (c) => (d += c));
       res.on('end', () => resolve(res.statusCode === 200 ? 'ready' : 'loading'));
@@ -66,15 +75,16 @@ function llamaHealth() {
   });
 }
 
-function llamaRunning() {
-  try { execSync('pgrep -f "llama-serve[r].*--port ' + LLM_PORT + '"'); return true; } catch { return false; }
+function llamaRunning(m) {
+  try { execSync('pgrep -f "llama-serve[r].*--port ' + m.port + '"'); return true; } catch { return false; }
 }
 
-function startLlama() {
-  if (llamaRunning()) return false;
-  const child = spawn('bash', [path.join(__dirname, 'llama-max.sh')], {
+function startLlama(m) {
+  if (llamaRunning(m)) return false;
+  const log = path.join(HOME, m.log);
+  const child = spawn('bash', [path.join(__dirname, m.script)], {
     detached: true,
-    stdio: ['ignore', fs.openSync(LLAMA_LOG, 'w'), fs.openSync(LLAMA_LOG, 'a')],
+    stdio: ['ignore', fs.openSync(log, 'w'), fs.openSync(log, 'a')],
   });
   child.unref();
   return true;
@@ -82,12 +92,12 @@ function startLlama() {
 
 // Chat requests start the model themselves, so callers never have to press
 // Start first. Loading takes a few seconds; give up after 90.
-async function ensureLlama() {
-  if ((await llamaHealth()) === 'ready') return true;
-  startLlama();
+async function ensureLlama(m) {
+  if ((await llamaHealth(m)) === 'ready') return true;
+  startLlama(m);
   for (let i = 0; i < 90; i++) {
     await new Promise((r) => setTimeout(r, 1000));
-    if ((await llamaHealth()) === 'ready') return true;
+    if ((await llamaHealth(m)) === 'ready') return true;
   }
   return false;
 }
@@ -139,37 +149,46 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/me') return send(res, 200, { ok: true });
   if (url.pathname === '/api/system') return send(res, 200, systemInfo());
 
+  const model = pickModel(url.searchParams.get('model'));
+
   if (url.pathname === '/api/llama/status') {
-    const health = await llamaHealth();
-    const status = health === 'stopped' && llamaRunning() ? 'loading' : health;
+    const health = await llamaHealth(model);
+    const status = health === 'stopped' && llamaRunning(model) ? 'loading' : health;
     let log = '';
-    try { log = fs.readFileSync(LLAMA_LOG, 'utf8').split('\n').slice(-25).join('\n'); } catch {}
+    try { log = fs.readFileSync(path.join(HOME, model.log), 'utf8').split('\n').slice(-25).join('\n'); } catch {}
     return send(res, 200, { status, log });
   }
 
   if (url.pathname === '/api/llama/start' && req.method === 'POST') {
-    if (!startLlama()) return send(res, 200, { started: false, status: await llamaHealth() });
+    if (!startLlama(model)) return send(res, 200, { started: false, status: await llamaHealth(model) });
     return send(res, 200, { started: true });
   }
 
   if (url.pathname === '/api/llama/stop' && req.method === 'POST') {
-    try { execSync('pkill -f "llama-serve[r].*--port ' + LLM_PORT + '"'); } catch {}
+    try { execSync('pkill -f "llama-serve[r].*--port ' + model.port + '"'); } catch {}
     return send(res, 200, { stopped: true });
   }
 
   // Proxy /llm/* to llama-server (streams SSE straight through).
   if (url.pathname.startsWith('/llm/')) {
-    if (req.method === 'POST' && !(await ensureLlama())) return send(res, 503, { error: 'llama-server did not come up; see ~/llama.log on the sandbox' });
+    if (url.pathname === '/llm/v1/models') {
+      return send(res, 200, { object: 'list', data: Object.values(MODELS).map((m) => ({ id: m.id, object: 'model', owned_by: 'sandbox' })) });
+    }
+    // Read the body to route on its `model`, then replay it upstream.
+    const body = req.method === 'POST' ? await readBody(req, 50e6) : ''; // a full 128K-token chat is a few MB
+    let target = model;
+    if (body) { try { target = pickModel(JSON.parse(body).model); } catch {} }
+    if (req.method === 'POST' && !(await ensureLlama(target))) return send(res, 503, { error: 'llama-server did not come up; see ~/' + target.log + ' on the sandbox' });
     const upstream = http.request({
-      host: '127.0.0.1', port: LLM_PORT, method: req.method,
+      host: '127.0.0.1', port: target.port, method: req.method,
       path: url.pathname.slice(4) + url.search,
-      headers: { 'content-type': req.headers['content-type'] || 'application/json' },
+      headers: { 'content-type': req.headers['content-type'] || 'application/json', 'content-length': Buffer.byteLength(body) },
     }, (up) => {
       res.writeHead(up.statusCode, { 'content-type': up.headers['content-type'] || 'application/json', 'cache-control': 'no-store', 'x-accel-buffering': 'no', ...CORS });
       up.pipe(res);
     });
     upstream.on('error', () => send(res, 503, { error: 'llama-server is not running — press "Start Llama 3.2 1B (Max)"' }));
-    req.pipe(upstream);
+    upstream.end(body);
     res.on('close', () => upstream.destroy()); // client went away (req 'close' fires once the body is read)
     return;
   }
