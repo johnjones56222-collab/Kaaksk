@@ -1,0 +1,12 @@
+Llama 3.1 8B Instruct + GPT-3.5-Turbo-style LoRA adapter (trained 2026-10-25)
+Base model: unsloth/Meta-Llama-3.1-8B-Instruct (same weights as meta-llama/Llama-3.1-8B-Instruct)
+Data: 400 GPT-3.5 Turbo answers from trl-lib/ultrafeedback-gpt-3.5-turbo-helpfulness (label=True)
+LoRA r=16 alpha=32 on q/k/v/o, 1 epoch, lr 2e-4, max len 512.
+
+Load (Python):
+  from transformers import AutoTokenizer, AutoModelForCausalLM
+  from peft import PeftModel
+  tok = AutoTokenizer.from_pretrained("unsloth/Meta-Llama-3.1-8B-Instruct")
+  model = AutoModelForCausalLM.from_pretrained("unsloth/Meta-Llama-3.1-8B-Instruct")
+  model = PeftModel.from_pretrained(model, "adapter_final")
+Training/test scripts included (train.py, prep.py, test.py).

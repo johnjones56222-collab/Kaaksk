@@ -1,0 +1,53 @@
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights:   0%|          | 1/291 [00:00<00:53,  5.43it/s]Loading weights:  14%|█▎        | 40/291 [00:00<00:01, 160.40it/s]Loading weights:  21%|██        | 60/291 [00:00<00:01, 171.59it/s]Loading weights:  27%|██▋       | 80/291 [00:00<00:01, 169.63it/s]Loading weights:  35%|███▌      | 103/291 [00:00<00:00, 188.14it/s]Loading weights:  42%|████▏     | 123/291 [00:00<00:00, 187.41it/s]Loading weights:  51%|█████     | 148/291 [00:00<00:00, 195.82it/s]Loading weights:  59%|█████▉    | 172/291 [00:00<00:00, 198.94it/s]Loading weights:  67%|██████▋   | 195/291 [00:01<00:00, 205.65it/s]Loading weights:  74%|███████▍  | 216/291 [00:01<00:00, 204.85it/s]Loading weights:  81%|████████▏ | 237/291 [00:01<00:00, 202.44it/s]Loading weights:  89%|████████▊ | 258/291 [00:01<00:00, 187.63it/s]Loading weights:  96%|█████████▌| 278/291 [00:01<00:00, 186.93it/s]Loading weights: 100%|██████████| 291/291 [00:01<00:00, 188.74it/s]
+trainable params: 13,631,488 || all params: 8,043,892,736 || trainable%: 0.1695
+step 1/50 loss 1.069 ex 8/400 15.2 tok/s elapsed 2.8m eta 139.0m
+step 2/50 loss 1.396 ex 16/400 14.7 tok/s elapsed 5.4m eta 129.6m
+step 3/50 loss 1.503 ex 24/400 14.2 tok/s elapsed 7.9m eta 123.8m
+step 4/50 loss 1.314 ex 32/400 14.2 tok/s elapsed 10.6m eta 121.6m
+step 5/50 loss 1.067 ex 40/400 14.1 tok/s elapsed 13.1m eta 117.9m
+step 6/50 loss 0.913 ex 48/400 14.1 tok/s elapsed 15.6m eta 114.6m
+step 7/50 loss 0.791 ex 56/400 14.1 tok/s elapsed 18.0m eta 110.6m
+step 8/50 loss 1.212 ex 64/400 14.1 tok/s elapsed 20.4m eta 107.1m
+step 9/50 loss 1.158 ex 72/400 14.0 tok/s elapsed 22.9m eta 104.2m
+step 10/50 loss 0.966 ex 80/400 14.0 tok/s elapsed 25.3m eta 101.2m
+step 11/50 loss 1.488 ex 88/400 14.0 tok/s elapsed 27.8m eta 98.4m
+step 12/50 loss 1.033 ex 96/400 13.9 tok/s elapsed 30.0m eta 95.0m
+step 13/50 loss 1.026 ex 104/400 13.8 tok/s elapsed 32.2m eta 91.7m
+step 14/50 loss 0.989 ex 112/400 13.8 tok/s elapsed 34.5m eta 88.8m
+step 15/50 loss 1.292 ex 120/400 13.8 tok/s elapsed 36.9m eta 86.0m
+step 16/50 loss 1.106 ex 128/400 13.8 tok/s elapsed 39.1m eta 83.0m
+step 17/50 loss 1.048 ex 136/400 13.8 tok/s elapsed 41.5m eta 80.5m
+step 18/50 loss 1.110 ex 144/400 13.8 tok/s elapsed 43.7m eta 77.7m
+step 19/50 loss 0.987 ex 152/400 13.8 tok/s elapsed 46.3m eta 75.6m
+step 20/50 loss 1.027 ex 160/400 13.8 tok/s elapsed 48.5m eta 72.7m
+step 21/50 loss 1.163 ex 168/400 13.8 tok/s elapsed 50.9m eta 70.4m
+step 22/50 loss 1.312 ex 176/400 13.8 tok/s elapsed 53.6m eta 68.2m
+step 23/50 loss 1.244 ex 184/400 13.8 tok/s elapsed 56.2m eta 66.0m
+step 24/50 loss 1.064 ex 192/400 13.8 tok/s elapsed 59.1m eta 64.1m
+step 25/50 loss 0.771 ex 200/400 13.9 tok/s elapsed 61.8m eta 61.8m
+step 26/50 loss 0.913 ex 208/400 13.8 tok/s elapsed 64.6m eta 59.6m
+step 27/50 loss 1.075 ex 216/400 13.9 tok/s elapsed 67.3m eta 57.4m
+step 28/50 loss 0.807 ex 224/400 8.3 tok/s elapsed 116.7m eta 91.7m
+step 29/50 loss 0.995 ex 232/400 8.4 tok/s elapsed 119.7m eta 86.7m
+step 30/50 loss 0.893 ex 240/400 8.5 tok/s elapsed 123.1m eta 82.0m
+step 31/50 loss 1.046 ex 248/400 8.6 tok/s elapsed 126.5m eta 77.6m
+step 32/50 loss 0.799 ex 256/400 8.7 tok/s elapsed 129.7m eta 72.9m
+step 33/50 loss 0.810 ex 264/400 8.8 tok/s elapsed 132.5m eta 68.3m
+step 34/50 loss 1.266 ex 272/400 8.9 tok/s elapsed 135.5m eta 63.7m
+step 35/50 loss 1.037 ex 280/400 9.0 tok/s elapsed 138.3m eta 59.3m
+step 36/50 loss 1.225 ex 288/400 9.0 tok/s elapsed 141.1m eta 54.9m
+step 37/50 loss 1.108 ex 296/400 9.2 tok/s elapsed 144.4m eta 50.7m
+step 38/50 loss 0.960 ex 304/400 9.3 tok/s elapsed 147.6m eta 46.6m
+step 39/50 loss 1.165 ex 312/400 9.3 tok/s elapsed 150.2m eta 42.4m
+step 40/50 loss 1.053 ex 320/400 9.4 tok/s elapsed 152.7m eta 38.2m
+step 41/50 loss 1.149 ex 328/400 9.4 tok/s elapsed 155.4m eta 34.1m
+step 42/50 loss 0.952 ex 336/400 9.5 tok/s elapsed 158.7m eta 30.2m
+step 43/50 loss 1.125 ex 344/400 9.6 tok/s elapsed 161.7m eta 26.3m
+step 44/50 loss 1.192 ex 352/400 9.7 tok/s elapsed 164.4m eta 22.4m
+step 45/50 loss 1.003 ex 360/400 9.7 tok/s elapsed 166.8m eta 18.5m
+step 46/50 loss 1.135 ex 368/400 9.8 tok/s elapsed 169.4m eta 14.7m
+step 47/50 loss 1.167 ex 376/400 9.8 tok/s elapsed 171.9m eta 11.0m
+step 48/50 loss 1.065 ex 384/400 9.9 tok/s elapsed 175.1m eta 7.3m
+step 49/50 loss 1.153 ex 392/400 10.0 tok/s elapsed 178.1m eta 3.6m
+step 50/50 loss 1.103 ex 400/400 10.0 tok/s elapsed 180.7m eta 0.0m
+TRAIN_DONE
