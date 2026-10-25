@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usenaive Terminal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+<style>
+  :root {
+    --bg: #0b0d10; --panel: #13161b; --panel2: #1a1e25; --line: #262b33;
+    --text: #e6e8eb; --muted: #8b939e; --accent: #7aa2ff; --ok: #4ade80; --warn: #facc15; --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel2);
+    color: var(--text); border-radius: 8px; padding: 7px 14px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #0b0d10; border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  input, textarea { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; width: 100%; }
+  textarea { resize: vertical; }
+  .app { display: flex; flex-direction: column; height: 100%; }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .spec { color: var(--muted); font-size: 12px; }
+  nav { display: flex; gap: 4px; margin-left: auto; }
+  nav button { border: none; background: none; color: var(--muted); }
+  nav button.on { color: var(--text); background: var(--panel2); }
+  main { flex: 1; min-height: 0; position: relative; }
+  .tab { position: absolute; inset: 0; display: none; }
+  .tab.on { display: flex; }
+  #term-tab { flex-direction: column; padding: 8px; }
+  .termbar { display: flex; gap: 8px; align-items: center; padding: 0 4px 8px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
+  .termbar code { color: var(--text); }
+  #term { flex: 1; min-height: 0; background: #000; border-radius: 8px; padding: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+  /* chat */
+  #chat-tab { flex-direction: row; }
+  .side { width: 320px; border-right: 1px solid var(--line); padding: 16px; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .card h3 { margin: 0 0 6px; font-size: 14px; }
+  .card p { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .kv b { color: var(--text); font-weight: 500; }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  pre.log { background: #000; color: #9aa4b2; font-size: 11px; padding: 8px; border-radius: 6px; max-height: 160px;
+    overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 10px 0 0; }
+  .chat { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .msgs { flex: 1; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 760px; white-space: pre-wrap; word-wrap: break-word; padding: 10px 14px; border-radius: 12px; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #0b0d10; }
+  .msg.assistant { align-self: flex-start; background: var(--panel2); border: 1px solid var(--line); }
+  .msg .meta { display: block; font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .empty { margin: auto; text-align: center; color: var(--muted); max-width: 420px; }
+  .composer { display: flex; gap: 8px; padding: 12px 20px 18px; border-top: 1px solid var(--line); }
+  .composer textarea { min-height: 44px; max-height: 200px; }
+  /* system */
+  #sys-tab { padding: 20px; overflow: auto; display: none; }
+  #sys-tab.on { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; max-width: 1000px; }
+  .stat .v { font-size: 22px; font-weight: 600; }
+  .stat .l { color: var(--muted); font-size: 12px; }
+  /* login */
+  #login { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: var(--bg); z-index: 10; padding: 16px; }
+  #login.on { display: flex; }
+  #login form { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 10px; }
+  #login .err { color: var(--bad); font-size: 12px; min-height: 18px; }
+  @media (max-width: 760px) {
+    #chat-tab { flex-direction: column; }
+    .side { width: auto; border-right: none; border-bottom: 1px solid var(--line); max-height: 45%; }
+    nav { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div id="login"><form id="login-form">
+  <h2 style="margin:0">Usenaive Terminal</h2>
+  <p style="margin:0;color:var(--muted)">Full shell access to the sandbox. Enter the password.</p>
+  <input id="pw" type="password" placeholder="Password" autocomplete="current-password" autofocus>
+  <button class="primary">Unlock</button>
+  <div class="err" id="login-err"></div>
+</form></div>
+
+<div class="app">
+  <header>
+    <h1>Usenaive Terminal</h1>
+    <span class="spec" id="spec">connecting…</span>
+    <nav>
+      <button data-tab="term-tab" class="on">Terminal</button>
+      <button data-tab="chat-tab">Llama Chat</button>
+      <button data-tab="sys-tab">System</button>
+    </nav>
+  </header>
+  <main>
+    <section class="tab on" id="term-tab">
+      <div class="termbar">
+        <span class="dot" id="term-dot"></span><span id="term-state">connecting</span>
+        <span>· tmux session <code>main</code> (keeps running when you close the page)</span>
+        <span style="margin-left:auto">try <code>llama-max</code>, <code>llama-chat</code>, <code>htop</code>, <code>python3</code></span>
+        <button id="term-reconnect" style="padding:3px 10px">Reconnect</button>
+      </div>
+      <div id="term"></div>
+    </section>
+
+    <section class="tab" id="chat-tab">
+      <aside class="side">
+        <div class="card">
+          <h3>Preset · Llama 3.2 1B Instruct (Max)</h3>
+          <p>Meta's Llama 3 family at 1B parameters, run with llama.cpp on every core.</p>
+          <div class="kv">
+            <span>Weights</span><b>F16 (full precision, 2.5 GB)</b>
+            <span>Context</span><b>131,072 tokens × 4 slots</b>
+            <span>Threads</span><b id="threads">all cores</b>
+            <span>Batch</span><b>4096 / ubatch 1024</b>
+            <span>Status</span><b><span class="dot" id="llm-dot"></span> <span id="llm-state">checking</span></b>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="primary" id="llm-start">Start Llama 3.2 1B (Max)</button>
+            <button id="llm-stop">Stop</button>
+          </div>
+          <pre class="log" id="llm-log" hidden></pre>
+        </div>
+        <div class="card">
+          <h3>Chat settings</h3>
+          <label for="sys">System prompt</label>
+          <textarea id="sys" rows="3">You are a helpful assistant.</textarea>
+          <div style="display:flex;gap:10px;margin-top:10px">
+            <div style="flex:1"><label for="temp">Temperature</label><input id="temp" type="number" step="0.1" min="0" max="2" value="0.7"></div>
+            <div style="flex:1"><label for="maxtok">Max tokens</label><input id="maxtok" type="number" min="1" max="131072" value="2048"></div>
+          </div>
+          <button id="clear" style="margin-top:12px;width:100%">New chat</button>
+        </div>
+      </aside>
+      <div class="chat">
+        <div class="msgs" id="msgs"></div>
+        <form class="composer" id="composer">
+          <textarea id="input" placeholder="Message Llama… (Enter to send, Shift+Enter for a new line)" rows="1"></textarea>
+          <button class="primary" id="send">Send</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="tab" id="sys-tab">
+      <div class="grid" id="stats"></div>
+    </section>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+// ---------- login ----------
+async function checkLogin() {
+  const r = await fetch('/api/me');
+  if (r.ok) return start();
+  $('login').classList.add('on');
+}
+$('login-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: $('pw').value }) });
+  if (!r.ok) { $('login-err').textContent = 'Wrong password'; return; }
+  $('login').classList.remove('on');
+  start();
+};
+
+// ---------- tabs ----------
+document.querySelectorAll('nav button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+function showTab(id) {
+  document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x.dataset.tab === id));
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === id));
+  store.set('tab', id);
+  if (id === 'term-tab') setTimeout(() => { fit.fit(); term.focus(); }, 0);
+}
+
+// ---------- terminal ----------
+const term = new Terminal({ cursorBlink: true, fontSize: 14, scrollback: 10000,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', theme: { background: '#000000' } });
+const fit = new FitAddon.FitAddon();
+term.loadAddon(fit);
+let ws, pingTimer;
+function setTermState(cls, text) { $('term-dot').className = 'dot ' + cls; $('term-state').textContent = text; }
+function connectTerm() {
+  if (ws) { ws.onclose = null; ws.close(); }
+  clearInterval(pingTimer);
+  setTermState('warn', 'connecting');
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/term?session=main');
+  ws.onopen = () => {
+    setTermState('ok', 'connected');
+    fit.fit(); sendSize();
+    pingTimer = setInterval(() => ws.readyState === 1 && ws.send('\x00ping'), 25000);
+  };
+  ws.onmessage = (e) => term.write(e.data);
+  ws.onclose = () => { setTermState('bad', 'disconnected — reconnecting'); clearInterval(pingTimer); setTimeout(connectTerm, 2000); };
+}
+function sendSize() { if (ws && ws.readyState === 1) ws.send('\x00resize:' + term.cols + 'x' + term.rows); }
+term.onData((d) => ws && ws.readyState === 1 && ws.send(d));
+term.onResize(sendSize);
+window.addEventListener('resize', () => { if ($('term-tab').classList.contains('on')) fit.fit(); });
+$('term-reconnect').onclick = connectTerm;
+
+// ---------- llama ----------
+let llmStatus = 'stopped', pollTimer;
+async function pollLlama() {
+  try {
+    const r = await fetch('/api/llama/status');
+    const j = await r.json();
+    llmStatus = j.status;
+    $('llm-dot').className = 'dot ' + ({ ready: 'ok', loading: 'warn', stopped: 'bad' }[j.status] || '');
+    $('llm-state').textContent = { ready: 'running', loading: 'loading model…', stopped: 'stopped' }[j.status] || j.status;
+    $('llm-start').disabled = j.status !== 'stopped';
+    $('llm-stop').disabled = j.status === 'stopped';
+    if (j.log && j.status !== 'ready') { $('llm-log').hidden = false; $('llm-log').textContent = j.log; $('llm-log').scrollTop = 1e9; }
+    else $('llm-log').hidden = true;
+  } catch {}
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(pollLlama, llmStatus === 'ready' ? 10000 : 1500);
+}
+$('llm-start').onclick = async () => {
+  $('llm-start').disabled = true;
+  await fetch('/api/llama/start', { method: 'POST' });
+  pollLlama();
+};
+$('llm-stop').onclick = async () => { await fetch('/api/llama/stop', { method: 'POST' }); pollLlama(); };
+
+// ---------- chat ----------
+let history = store.get('chat', []);
+['sys', 'temp', 'maxtok'].forEach((id) => {
+  const saved = store.get('set-' + id, null);
+  if (saved != null) $(id).value = saved;
+  $(id).onchange = () => store.set('set-' + id, $(id).value);
+});
+function render() {
+  const box = $('msgs');
+  box.innerHTML = '';
+  if (!history.length) {
+    box.innerHTML = '<div class="empty"><h3 style="color:var(--text)">Talk to Llama 3.2 1B</h3>Press <b>Start Llama 3.2 1B (Max)</b>, wait for "running", then type below. It runs entirely on this sandbox.</div>';
+    return;
+  }
+  for (const m of history) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + m.role;
+    d.textContent = m.content;
+    if (m.meta) { const s = document.createElement('span'); s.className = 'meta'; s.textContent = m.meta; d.appendChild(s); }
+    box.appendChild(d);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+$('clear').onclick = () => { history = []; store.set('chat', history); render(); };
+$('input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('composer').requestSubmit(); } });
+let busy = false;
+$('composer').onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $('input').value.trim();
+  if (!text || busy) return;
+  if (llmStatus !== 'ready') {
+    if (llmStatus === 'stopped') { await fetch('/api/llama/start', { method: 'POST' }); pollLlama(); }
+    history.push({ role: 'assistant', content: 'Llama is starting up — send your message again once the status says "running".' });
+    render();
+    return;
+  }
+  busy = true; $('send').disabled = true;
+  $('input').value = '';
+  history.push({ role: 'user', content: text });
+  const reply = { role: 'assistant', content: '' };
+  history.push(reply);
+  render();
+  const msgEl = $('msgs').lastChild;
+  const messages = [{ role: 'system', content: $('sys').value }, ...history.slice(0, -1).filter((m) => !m.note).map(({ role, content }) => ({ role, content }))];
+  const t0 = performance.now();
+  let tokens = 0;
+  try {
+    const r = await fetch('/llm/v1/chat/completions', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'llama-3.2-1b-instruct-f16', messages, stream: true,
+        temperature: Number($('temp').value), max_tokens: Number($('maxtok').value) }),
+    });
+    if (!r.ok) throw new Error((await r.text()).slice(0, 300));
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+        try {
+          const delta = JSON.parse(line.slice(6)).choices?.[0]?.delta?.content;
+          if (delta) { reply.content += delta; tokens++; msgEl.textContent = reply.content; $('msgs').scrollTop = 1e9; }
+        } catch {}
+      }
+    }
+    const secs = (performance.now() - t0) / 1000;
+    reply.meta = `${tokens} tokens · ${(tokens / secs).toFixed(1)} tok/s`;
+  } catch (err) {
+    reply.content = 'Error: ' + err.message;
+    reply.note = true;
+  }
+  store.set('chat', history);
+  render();
+  busy = false; $('send').disabled = false;
+};
+
+// ---------- system ----------
+async function pollSystem() {
+  try {
+    const s = await (await fetch('/api/system')).json();
+    $('spec').textContent = `${s.cpus} vCPU · ${Math.round(s.mem_total_gb)} GB RAM · ${s.disk.split(' / ')[1] || ''} disk`;
+    $('threads').textContent = s.cpus + ' threads';
+    const stat = (v, l) => `<div class="card stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+    $('stats').innerHTML = stat(s.cpus, 'vCPUs · ' + (s.cpu_model || '')) + stat(`${s.mem_used_gb} / ${s.mem_total_gb} GB`, 'RAM used')
+      + stat(s.disk, 'Disk used') + stat(s.load.join(' · '), 'Load average (1/5/15 min)')
+      + stat(Math.floor(s.uptime_s / 3600) + 'h ' + Math.floor(s.uptime_s % 3600 / 60) + 'm', 'Uptime') + stat(s.hostname, 'Hostname');
+  } catch {}
+  setTimeout(pollSystem, 5000);
+}
+
+function start() {
+  term.open($('term'));
+  connectTerm();
+  render();
+  pollLlama();
+  pollSystem();
+  showTab(store.get('tab', 'term-tab'));
+}
+checkLogin();
+</script>
+</body>
+</html>

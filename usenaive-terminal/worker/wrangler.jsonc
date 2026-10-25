@@ -1,0 +1,8 @@
+{
+  "name": "usenaive-terminal",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "kv_namespaces": [{ "binding": "KV", "id": "85181d3f86554627bd783b6d6d492eee" }]
+  // Secret (npx wrangler secret put REGISTER_SECRET): shared with the sandbox's
+  // ~/.usenaive-terminal.env so only it can set the tunnel URL.
+}
