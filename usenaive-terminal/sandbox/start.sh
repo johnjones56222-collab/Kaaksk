@@ -8,6 +8,9 @@ export PORT=7860
 
 (while true; do node server.js >> "$HOME/web.log" 2>&1; sleep 2; done) &
 
+# Restarts cloudflared if its tunnel dies while the process keeps running.
+(cd "$(dirname "$0")" && pgrep -f "tunnel-watchdo[g]" > /dev/null || setsid ./tunnel-watchdog.sh > /dev/null 2>&1 &)
+
 while true; do
   : > "$HOME/tunnel.log"
   cloudflared tunnel --no-autoupdate --url "http://127.0.0.1:$PORT" >> "$HOME/tunnel.log" 2>&1 &

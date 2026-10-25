@@ -76,6 +76,11 @@ MODEL_KEY, so the nodes refuse anyone else.
 - `sandbox/llama-max.sh`: the max preset (also `/usr/local/bin/llama-max`).
 - `sandbox/llama-chat.sh`: terminal chat (also `/usr/local/bin/llama-chat`).
 - `sandbox/start.sh`: keeps the server and tunnel running and registers the URL.
+- `sandbox/tunnel-watchdog.sh` (also in `model-node/`): started by `start.sh` /
+  `node-start.sh`. A quick tunnel can die on Cloudflare's side ("Tunnel not
+  found") while cloudflared keeps running; every minute the watchdog checks
+  `<tunnel>/health` and after 3 failures kills cloudflared so a fresh tunnel
+  is started and registered. Log: `~/watchdog.log`.
 - `worker/`: the Cloudflare Worker (KV binding `KV`, secret `REGISTER_SECRET`).
 - `model-node/setup.sh`, `model-node/node-start.sh`: a model node's one-time
   setup and its server + tunnel supervisor.
