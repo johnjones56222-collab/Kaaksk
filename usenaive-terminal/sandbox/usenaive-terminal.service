@@ -1,0 +1,18 @@
+# Starts the hub (web server, terminal, tunnel, watchdog) at boot, so it comes
+# back by itself after the computer restarts. Install:
+#   sudo cp usenaive-terminal.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable usenaive-terminal
+[Unit]
+Description=usenaive-terminal hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=tenki
+WorkingDirectory=/home/tenki/usenaive-terminal
+ExecStart=/home/tenki/usenaive-terminal/start.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

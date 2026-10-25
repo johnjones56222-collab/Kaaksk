@@ -1,0 +1,18 @@
+# Starts a model node (llama-server, tunnel, watchdog) at boot, so it comes
+# back by itself after the computer restarts. Install:
+#   sudo cp llama-node.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable llama-node
+[Unit]
+Description=Llama model node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=tenki
+WorkingDirectory=/home/tenki/node
+ExecStart=/home/tenki/node/node-start.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

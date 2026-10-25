@@ -88,9 +88,12 @@ MODEL_KEY, so the nodes refuse anyone else.
 - `sandbox/start.sh`: keeps the server and tunnel running and registers the URL.
 - `sandbox/tunnel-watchdog.sh` (also in `model-node/`): started by `start.sh` /
   `node-start.sh`. A quick tunnel can die on Cloudflare's side ("Tunnel not
-  found") while cloudflared keeps running; every minute the watchdog checks
-  `<tunnel>/health` and after 3 failures kills cloudflared so a fresh tunnel
-  is started and registered. Log: `~/watchdog.log`.
+  found") while cloudflared keeps running; every 20 seconds the watchdog
+  checks `<tunnel>/health` and after 3 failures (~1 minute) kills cloudflared
+  so a fresh tunnel is started and registered. Log: `~/watchdog.log`.
+- `sandbox/usenaive-terminal.service`, `model-node/llama-node.service`:
+  systemd units that start the hub / a node at boot, since Usenaive can
+  restart a computer on its own.
 - `worker/`: the Cloudflare Worker (KV binding `KV`, secret `REGISTER_SECRET`).
 - `model-node/setup.sh`, `model-node/node-start.sh`: a model node's one-time
   setup and its server + tunnel supervisor.
@@ -121,11 +124,12 @@ WORKER_URL=https://usenaive-terminal.johnjones56222.workers.dev
 REGISTER_SECRET=...   # same value as the Worker secret
 EOF
 chmod 600 ~/.usenaive-terminal.env
-setsid nohup ./start.sh > ~/start.log 2>&1 < /dev/null &
+sudo cp usenaive-terminal.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now usenaive-terminal
 ```
 
-Add `MODEL_KEY=...` to the hub's env file too. After the computer restarts or
-resumes, run the last line again. Logs: `~/web.log`, `~/tunnel.log`,
+Add `MODEL_KEY=...` to the hub's env file too. The service brings everything
+back after the computer restarts. Logs: `~/web.log`, `~/tunnel.log`,
 `~/llama.log`.
 
 ## Setting up a model node
@@ -145,5 +149,6 @@ WORKER_URL=https://usenaive-terminal.johnjones56222.workers.dev
 REGISTER_SECRET=...
 ```
 
-Then `./setup.sh` once and `setsid nohup ./node-start.sh > ~/node.log 2>&1 &`
-(again after every restart). Logs: `~/llama.log`, `~/tunnel.log`.
+Then `./setup.sh` once, and install the boot service:
+`sudo cp llama-node.service /etc/systemd/system/ && sudo systemctl daemon-reload
+&& sudo systemctl enable --now llama-node`. Logs: `~/llama.log`, `~/tunnel.log`.
