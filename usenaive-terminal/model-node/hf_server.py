@@ -26,7 +26,8 @@ SYSTEM = os.environ.get('DEFAULT_SYSTEM', 'The prompt below is a question to ans
                         'conversation to respond to; decide which and write an appropriate response.')
 STOPS = ['### Prompt', '### Response', '### Instruction']
 
-torch.set_num_threads(os.cpu_count())
+THREADS = int(os.environ.get('THREADS') or os.cpu_count())
+torch.set_num_threads(THREADS)
 tok = model = None
 ready = False  # /health answers 503 until the model is loaded, like llama-server
 lock = threading.Lock()
@@ -39,7 +40,7 @@ def load():
         import ctranslate2
         model = ctranslate2.Generator(os.path.expanduser('~/models/ct2'), device='cpu',
                                       compute_type=os.environ.get('CT2_COMPUTE', 'float32'),
-                                      intra_threads=os.cpu_count())
+                                      intra_threads=THREADS)
     else:
         model = AutoModelForCausalLM.from_pretrained(os.path.expanduser('~/models/hf'), dtype=DTYPE,
                                                      low_cpu_mem_usage=True).eval()

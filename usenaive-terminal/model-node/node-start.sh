@@ -6,17 +6,20 @@
 # SERVER_SCRIPT (optional) runs that Python server instead of llama-server.
 set -a; . "$HOME/.llama-node.env"; set +a
 PORT=8080
+# Leave 2 cores and scheduling priority to cloudflared: with every core busy
+# generating, its QUIC connection timed out and the tunnel dropped (530).
+export THREADS=$(( $(nproc) > 4 ? $(nproc) - 2 : $(nproc) ))
 
 (while true; do
   if [ -n "$SERVER_SCRIPT" ]; then
     # A Transformers model llama.cpp can't load (see hf_server.py).
-    PORT=$PORT "$HOME/hfenv/bin/python" "$(dirname "$0")/$SERVER_SCRIPT" >> "$HOME/llama.log" 2>&1
+    PORT=$PORT nice -n 10 "$HOME/hfenv/bin/python" "$(dirname "$0")/$SERVER_SCRIPT" >> "$HOME/llama.log" 2>&1
   else
-  "$HOME/llama.cpp/build/bin/llama-server" \
+  nice -n 10 "$HOME/llama.cpp/build/bin/llama-server" \
     --model "$HOME/models/$MODEL_FILE" --alias "$ALIAS" \
     --host 127.0.0.1 --port "$PORT" --api-key "$MODEL_KEY" \
     --ctx-size $((131072 * PARALLEL)) --parallel "$PARALLEL" \
-    --threads "$(nproc)" --threads-batch "$(nproc)" \
+    --threads "$THREADS" --threads-batch "$THREADS" \
     --batch-size 4096 --ubatch-size 1024 \
     --flash-attn on --jinja ${LORA_FILE:+--lora "$HOME/models/$LORA_FILE"} >> "$HOME/llama.log" 2>&1
   fi
