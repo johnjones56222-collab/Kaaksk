@@ -13,23 +13,32 @@ https://usenaive-terminal.johnjones56222.workers.dev
   4 parallel slots, all 16 threads, and batch 4096 / ubatch 1024. A chat window
   then streams replies (about 35 tok/s), with a system prompt, temperature and
   max tokens. The chat is kept in the browser.
-- A model picker switches between the standard model and an **uncensored**
-  one: [huihui-ai/Llama-3.2-1B-Instruct-abliterated](https://huggingface.co/huihui-ai/Llama-3.2-1B-Instruct-abliterated)
-  (the same model with its refusal behaviour removed), F16 GGUF from
-  mradermacher, with the same max settings. Each runs in its own llama-server
-  (standard on port 8080, uncensored on 8081); both fit in RAM at once.
+- A model picker switches between the standard model and three
+  **uncensored** ("abliterated": refusal behaviour removed) ones, each on its
+  own maxed-out Usenaive computer (a *model node*, 16 vCPU / 64 GB / 100 GB):
+
+  | Model | Weights | Context | Node computer |
+  |---|---|---|---|
+  | Llama 3.2 1B Instruct (standard) | F16, 2.5 GB | 128K × 4 slots | the hub (this one) |
+  | [huihui-ai/Llama-3.2-1B-Instruct-abliterated](https://huggingface.co/huihui-ai/Llama-3.2-1B-Instruct-abliterated) | F16, 3.0 GB | 128K × 4 slots | `llama-1b-uncensored-max` |
+  | [huihui-ai/Llama-3.2-3B-Instruct-abliterated](https://huggingface.co/huihui-ai/Llama-3.2-3B-Instruct-abliterated) | F16, 7.2 GB | 128K × 3 slots | `llama-3b-uncensored-max` |
+  | [mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated](https://huggingface.co/mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated) | BF16, 16 GB | 128K × 2 slots | `llama-8b-uncensored-max` |
+
+  Slots are as many full 128K contexts as fit in 64 GB next to the weights.
+  The 8B streams at about 13-17 tok/s.
 - **System**: CPU, RAM, disk, load and uptime.
 - The same models work from the terminal: `llama-max` runs the server preset
   in the foreground and `llama-chat` chats with the model in the terminal
-  (`llama-max-uncensored` and `llama-chat --uncensored` for the other model).
+  (`llama-chat --uncensored` for the 1B uncensored weights, also kept here).
 
 Other apps can use the model as an OpenAI-compatible API:
 `POST https://usenaive-terminal.johnjones56222.workers.dev/llm/v1/chat/completions`
 with `Authorization: Bearer <WEB_PASSWORD>` (CORS is open on `/llm/*` and
-`/api/llama/*`). The `model` field picks `llama-3.2-1b-instruct-f16` or
-`llama-3.2-1b-instruct-abliterated-f16` (`GET /llm/v1/models` lists them), and
-the first request loads that model if it isn't running. Nexus
-v37.38 uses this for its "SANDBOX POWERED LLM" section (`sbx/` model ids).
+`/api/llama/*`). The `model` field picks one of `llama-3.2-1b-instruct-f16`,
+`llama-3.2-1b-instruct-abliterated-f16`, `llama-3.2-3b-instruct-abliterated-f16`
+or `llama-3.1-8b-instruct-abliterated-bf16` (`GET /llm/v1/models` lists them).
+The standard model loads on the first request; the nodes keep theirs loaded.
+Nexus v37.40 uses this for its "SANDBOX POWERED LLM" section (`sbx/` ids).
 
 The whole site sits behind one password (`WEB_PASSWORD`). Anyone with it gets
 a full shell on the computer, so share it carefully.
@@ -54,15 +63,22 @@ POSTs the current one to the Worker's `/__register` every minute (with
 `REGISTER_SECRET`), and the Worker keeps it in KV. The address you share never
 changes. When the computer is paused, the Worker shows an "offline" page.
 
+Model nodes run `model-node/node-start.sh`: llama-server with `--api-key
+MODEL_KEY` behind their own quick tunnel, registered with the Worker as
+`node:<name>`. The hub reads the addresses from the Worker's `/__nodes`
+(`?names=`, authenticated with `REGISTER_SECRET`) and proxies to them with
+MODEL_KEY, so the nodes refuse anyone else.
+
 ## Files
 
 - `sandbox/server.js`: web server, terminal, llama controls and proxy.
 - `sandbox/public/index.html`: the page.
 - `sandbox/llama-max.sh`: the max preset (also `/usr/local/bin/llama-max`).
-- `sandbox/llama-max-uncensored.sh`: the same preset with the abliterated model.
 - `sandbox/llama-chat.sh`: terminal chat (also `/usr/local/bin/llama-chat`).
 - `sandbox/start.sh`: keeps the server and tunnel running and registers the URL.
 - `worker/`: the Cloudflare Worker (KV binding `KV`, secret `REGISTER_SECRET`).
+- `model-node/setup.sh`, `model-node/node-start.sh`: a model node's one-time
+  setup and its server + tunnel supervisor.
 
 ## Setting up a computer
 
@@ -93,5 +109,25 @@ chmod 600 ~/.usenaive-terminal.env
 setsid nohup ./start.sh > ~/start.log 2>&1 < /dev/null &
 ```
 
-After the computer restarts or resumes, run the last line again. Logs:
-`~/web.log`, `~/tunnel.log`, `~/llama.log`, `~/llama-uncensored.log`.
+Add `MODEL_KEY=...` to the hub's env file too. After the computer restarts or
+resumes, run the last line again. Logs: `~/web.log`, `~/tunnel.log`,
+`~/llama.log`.
+
+## Setting up a model node
+
+On another 16 vCPU / 64 GB / 100 GB computer, copy `model-node/` to `~/node`
+and write `~/.llama-node.env` (mode 600):
+
+```sh
+NODE_NAME=uncensored-8b                      # matches `node` in server.js MODELS
+ALIAS=llama-3.1-8b-instruct-abliterated-bf16 # the API model id
+MODEL_FILE=Meta-Llama-3.1-8B-Instruct-abliterated-bf16.gguf
+MODEL_URL=https://huggingface.co/mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated-GGUF/resolve/main/meta-llama-3.1-8b-instruct-abliterated.bf16.gguf
+PARALLEL=2                                   # 128K-token slots
+MODEL_KEY=...                                # same as the hub's
+WORKER_URL=https://usenaive-terminal.johnjones56222.workers.dev
+REGISTER_SECRET=...
+```
+
+Then `./setup.sh` once and `setsid nohup ./node-start.sh > ~/node.log 2>&1 &`
+(again after every restart). Logs: `~/llama.log`, `~/tunnel.log`.

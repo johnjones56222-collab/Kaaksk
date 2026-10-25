@@ -108,22 +108,25 @@
     <section class="tab" id="chat-tab">
       <aside class="side">
         <div class="card">
-          <h3>Preset · Llama 3.2 1B Instruct (Max)</h3>
-          <p>Meta's Llama 3 family at 1B parameters, run with llama.cpp on every core.</p>
+          <h3>Preset · Llama (Max)</h3>
+          <p>Meta's Llama 3.1 / 3.2 models at full precision, run with llama.cpp on every core.</p>
           <label for="llm-model">Model</label>
           <select id="llm-model" style="width:100%;margin-bottom:10px;font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px">
             <option value="standard">Llama 3.2 1B Instruct (standard)</option>
-            <option value="uncensored">Llama 3.2 1B Instruct Abliterated (uncensored)</option>
+            <option value="uncensored-1b">Llama 3.2 1B Instruct Abliterated (uncensored)</option>
+            <option value="uncensored-3b">Llama 3.2 3B Instruct Abliterated (uncensored)</option>
+            <option value="uncensored-8b">Llama 3.1 8B Instruct Abliterated (uncensored)</option>
           </select>
           <p id="llm-model-note"></p>
           <div class="kv">
             <span>Weights</span><b id="llm-weights">F16 (full precision, 2.5 GB)</b>
-            <span>Context</span><b>131,072 tokens × 4 slots</b>
+            <span>Context</span><b id="llm-ctx">131,072 tokens × 4 slots</b>
+            <span>Computer</span><b id="llm-where">this one</b>
             <span>Threads</span><b id="threads">all cores</b>
             <span>Batch</span><b>4096 / ubatch 1024</b>
             <span>Status</span><b><span class="dot" id="llm-dot"></span> <span id="llm-state">checking</span></b>
           </div>
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px" id="llm-buttons">
             <button class="primary" id="llm-start">Start (Max)</button>
             <button id="llm-stop">Stop</button>
           </div>
@@ -217,15 +220,25 @@ $('term-reconnect').onclick = connectTerm;
 const MODELS = {
   standard: { id: 'llama-3.2-1b-instruct-f16', weights: 'F16 (full precision, 2.5 GB)',
     note: 'Meta\'s official instruct model, with its built-in safety refusals.' },
-  uncensored: { id: 'llama-3.2-1b-instruct-abliterated-f16', weights: 'F16 (full precision, 3.0 GB)',
+  'uncensored-1b': { id: 'llama-3.2-1b-instruct-abliterated-f16', weights: 'F16 (full precision, 3.0 GB)', node: true, slots: 4,
     note: 'huihui-ai\'s abliterated version: the same model with its refusal behaviour removed, so it stays in character and rarely says no.' },
+  'uncensored-3b': { id: 'llama-3.2-3b-instruct-abliterated-f16', weights: 'F16 (full precision, 7.2 GB)', node: true, slots: 3,
+    note: 'huihui-ai\'s abliterated Llama 3.2 3B: smarter than 1B, refusals removed.' },
+  'uncensored-8b': { id: 'llama-3.1-8b-instruct-abliterated-bf16', weights: 'BF16 (full precision, 16 GB)', node: true, slots: 2,
+    note: 'mlabonne\'s abliterated Llama 3.1 8B: the strongest of the four, refusals removed.' },
 };
 let llmKey = store.get('llm-model', 'standard');
+if (llmKey === 'uncensored') llmKey = 'uncensored-1b';
 if (!MODELS[llmKey]) llmKey = 'standard';
 $('llm-model').value = llmKey;
 function showModel() {
   $('llm-weights').textContent = MODELS[llmKey].weights;
   $('llm-model-note').textContent = MODELS[llmKey].note;
+  $('llm-ctx').textContent = '131,072 tokens × ' + (MODELS[llmKey].slots || 4) + ' slots';
+  // Uncensored models each have their own 16 vCPU / 64 GB computer that keeps
+  // the model loaded, so there is nothing to start or stop from here.
+  $('llm-where').textContent = MODELS[llmKey].node ? 'its own (16 vCPU · 64 GB), always on' : 'this one';
+  $('llm-buttons').style.display = MODELS[llmKey].node ? 'none' : 'flex';
 }
 showModel();
 $('llm-model').onchange = () => { llmKey = $('llm-model').value; store.set('llm-model', llmKey); showModel(); pollLlama(); };
@@ -236,7 +249,7 @@ async function pollLlama() {
     const j = await r.json();
     llmStatus = j.status;
     $('llm-dot').className = 'dot ' + ({ ready: 'ok', loading: 'warn', stopped: 'bad' }[j.status] || '');
-    $('llm-state').textContent = { ready: 'running', loading: 'loading model…', stopped: 'stopped' }[j.status] || j.status;
+    $('llm-state').textContent = { ready: 'running', loading: 'loading model…', stopped: j.node ? 'offline' : 'stopped' }[j.status] || j.status;
     $('llm-start').disabled = j.status !== 'stopped';
     $('llm-stop').disabled = j.status === 'stopped';
     if (j.log && j.status !== 'ready') { $('llm-log').hidden = false; $('llm-log').textContent = j.log; $('llm-log').scrollTop = 1e9; }
@@ -283,8 +296,10 @@ $('composer').onsubmit = async (e) => {
   const text = $('input').value.trim();
   if (!text || busy) return;
   if (llmStatus !== 'ready') {
-    if (llmStatus === 'stopped') { await fetch('/api/llama/start?model=' + llmKey, { method: 'POST' }); pollLlama(); }
-    history.push({ role: 'assistant', content: 'Llama is starting up — send your message again once the status says "running".' });
+    if (llmStatus === 'stopped' && !MODELS[llmKey].node) { await fetch('/api/llama/start?model=' + llmKey, { method: 'POST' }); pollLlama(); }
+    history.push({ role: 'assistant', content: MODELS[llmKey].node && llmStatus === 'stopped'
+      ? 'That model\'s computer is offline right now — try again in a minute.'
+      : 'Llama is starting up — send your message again once the status says "running".' });
     render();
     return;
   }

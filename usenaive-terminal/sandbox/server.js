@@ -6,22 +6,41 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn, execSync } = require('child_process');
+const { Readable } = require('stream');
 const os = require('os');
 const pty = require('node-pty');
 const { WebSocketServer } = require('ws');
 
 const PORT = Number(process.env.PORT || 7860);
-// Each model runs in its own llama-server. Requests pick one by the `model`
-// field (chat) or ?model= (status/start/stop); anything else gets `standard`.
+// Requests pick a model by the `model` field (chat) or ?model= (status/start/
+// stop); anything else gets `standard`. The standard model runs here; each
+// uncensored one runs on its own Usenaive computer (a "node", see model-node/),
+// found through the Worker and called with MODEL_KEY.
 const MODELS = {
   standard: { id: 'llama-3.2-1b-instruct-f16', port: 8080, script: 'llama-max.sh', log: 'llama.log' },
-  uncensored: { id: 'llama-3.2-1b-instruct-abliterated-f16', port: 8081, script: 'llama-max-uncensored.sh', log: 'llama-uncensored.log' },
+  'uncensored-1b': { id: 'llama-3.2-1b-instruct-abliterated-f16', node: 'uncensored-1b' },
+  'uncensored-3b': { id: 'llama-3.2-3b-instruct-abliterated-f16', node: 'uncensored-3b' },
+  'uncensored-8b': { id: 'llama-3.1-8b-instruct-abliterated-bf16', node: 'uncensored-8b' },
 };
+MODELS.uncensored = MODELS['uncensored-1b']; // the page's old key
 const pickModel = (name) => {
   const n = String(name || '').toLowerCase();
-  return Object.values(MODELS).find((m) => n === m.id || n.endsWith('/' + m.id))
-    || (MODELS[n] || (/abliterat|uncensor/.test(n) ? MODELS.uncensored : MODELS.standard));
+  return Object.values(MODELS).find((m) => n === m.id || n.endsWith('/' + m.id)) || MODELS[n]
+    || (/abliterat|uncensor/.test(n) ? MODELS[/8b/.test(n) ? 'uncensored-8b' : /3b/.test(n) ? 'uncensored-3b' : 'uncensored-1b'] : MODELS.standard);
 };
+
+let nodeCache = { at: 0, urls: {} };
+async function nodeUrl(m) {
+  if (Date.now() - nodeCache.at > 30000) {
+    const names = [...new Set(Object.values(MODELS).filter((x) => x.node).map((x) => x.node))].join(',');
+    try {
+      const r = await fetch(process.env.WORKER_URL + '/__nodes?names=' + names, {
+        headers: { authorization: 'Bearer ' + process.env.REGISTER_SECRET }, signal: AbortSignal.timeout(5000) });
+      if (r.ok) nodeCache = { at: Date.now(), urls: await r.json() };
+    } catch {}
+  }
+  return nodeCache.urls[m.node] || null;
+}
 const PASSWORD = process.env.WEB_PASSWORD;
 if (!PASSWORD) throw new Error('WEB_PASSWORD is not set');
 const HOME = os.homedir();
@@ -63,7 +82,16 @@ function readBody(req, limit = 1e6) {
   });
 }
 
-function llamaHealth(m) {
+async function llamaHealth(m) {
+  if (m.node) {
+    const base = await nodeUrl(m);
+    if (!base) return 'stopped';
+    try {
+      const r = await fetch(base + '/health', { signal: AbortSignal.timeout(4000) });
+      if (r.status === 530 || r.status === 502) { nodeCache.at = 0; return 'stopped'; }
+      return r.status === 200 ? 'ready' : 'loading';
+    } catch { nodeCache.at = 0; return 'stopped'; }
+  }
   return new Promise((resolve) => {
     const r = http.get({ host: '127.0.0.1', port: m.port, path: '/health', timeout: 1500 }, (res) => {
       let d = '';
@@ -76,11 +104,12 @@ function llamaHealth(m) {
 }
 
 function llamaRunning(m) {
+  if (m.node) return false;
   try { execSync('pgrep -f "llama-serve[r].*--port ' + m.port + '"'); return true; } catch { return false; }
 }
 
 function startLlama(m) {
-  if (llamaRunning(m)) return false;
+  if (m.node || llamaRunning(m)) return false; // nodes keep their own server running
   const log = path.join(HOME, m.log);
   const child = spawn('bash', [path.join(__dirname, m.script)], {
     detached: true,
@@ -155,6 +184,7 @@ const server = http.createServer(async (req, res) => {
     const health = await llamaHealth(model);
     const status = health === 'stopped' && llamaRunning(model) ? 'loading' : health;
     let log = '';
+    if (model.node) return send(res, 200, { status, log, node: model.node });
     try { log = fs.readFileSync(path.join(HOME, model.log), 'utf8').split('\n').slice(-25).join('\n'); } catch {}
     return send(res, 200, { status, log });
   }
@@ -165,6 +195,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === '/api/llama/stop' && req.method === 'POST') {
+    if (model.node) return send(res, 200, { stopped: false, node: model.node });
     try { execSync('pkill -f "llama-serve[r].*--port ' + model.port + '"'); } catch {}
     return send(res, 200, { stopped: true });
   }
@@ -172,13 +203,28 @@ const server = http.createServer(async (req, res) => {
   // Proxy /llm/* to llama-server (streams SSE straight through).
   if (url.pathname.startsWith('/llm/')) {
     if (url.pathname === '/llm/v1/models') {
-      return send(res, 200, { object: 'list', data: Object.values(MODELS).map((m) => ({ id: m.id, object: 'model', owned_by: 'sandbox' })) });
+      return send(res, 200, { object: 'list', data: [...new Set(Object.values(MODELS))].map((m) => ({ id: m.id, object: 'model', owned_by: m.node ? 'node:' + m.node : 'sandbox' })) });
     }
     // Read the body to route on its `model`, then replay it upstream.
     const body = req.method === 'POST' ? await readBody(req, 50e6) : ''; // a full 128K-token chat is a few MB
     let target = model;
     if (body) { try { target = pickModel(JSON.parse(body).model); } catch {} }
-    if (req.method === 'POST' && !(await ensureLlama(target))) return send(res, 503, { error: 'llama-server did not come up; see ~/' + target.log + ' on the sandbox' });
+    if (req.method === 'POST' && !(await ensureLlama(target))) {
+      return send(res, 503, { error: target.node ? `the ${target.node} computer is offline or still loading` : 'llama-server did not come up; see ~/' + target.log + ' on the sandbox' });
+    }
+    if (target.node) {
+      const ac = new AbortController();
+      res.on('close', () => ac.abort());
+      try {
+        const up = await fetch((await nodeUrl(target)) + url.pathname.slice(4) + url.search, {
+          method: req.method, body: body || undefined, signal: ac.signal,
+          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + process.env.MODEL_KEY },
+        });
+        res.writeHead(up.status, { 'content-type': up.headers.get('content-type') || 'application/json', 'cache-control': 'no-store', 'x-accel-buffering': 'no', ...CORS });
+        if (up.body) Readable.fromWeb(up.body).on('error', () => res.end()).pipe(res); else res.end();
+      } catch { if (!res.headersSent) send(res, 502, { error: `could not reach the ${target.node} computer` }); }
+      return;
+    }
     const upstream = http.request({
       host: '127.0.0.1', port: target.port, method: req.method,
       path: url.pathname.slice(4) + url.search,

@@ -19,13 +19,29 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    const isSandbox = request.headers.get('authorization') === `Bearer ${env.REGISTER_SECRET}`;
+
+    // The hub registers without a name; model nodes register as `name` and
+    // the hub reads them back from /__nodes.
     if (url.pathname === '/__register' && request.method === 'POST') {
-      if (request.headers.get('authorization') !== `Bearer ${env.REGISTER_SECRET}`) return new Response('no', { status: 401 });
-      const { url: tunnel } = await request.json();
+      if (!isSandbox) return new Response('no', { status: 401 });
+      const { url: tunnel, name } = await request.json();
       if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(tunnel || '')) return new Response('bad url', { status: 400 });
-      if ((await env.KV.get('tunnel_url')) !== tunnel) await env.KV.put('tunnel_url', tunnel);
-      cached = { url: tunnel, at: Date.now() };
+      if (name !== undefined && !/^[a-z0-9-]{1,40}$/.test(name)) return new Response('bad name', { status: 400 });
+      const key = name ? 'node:' + name : 'tunnel_url';
+      if ((await env.KV.get(key)) !== tunnel) await env.KV.put(key, tunnel);
+      if (!name) cached = { url: tunnel, at: Date.now() };
       return new Response('ok');
+    }
+
+    // ?names=a,b -> { a: url, b: url }. Named lookups, not KV.list, whose
+    // daily free quota is small.
+    if (url.pathname === '/__nodes') {
+      if (!isSandbox) return new Response('no', { status: 401 });
+      const names = (url.searchParams.get('names') || '').split(',').filter((n) => /^[a-z0-9-]{1,40}$/.test(n)).slice(0, 20);
+      const nodes = {};
+      for (const n of names) nodes[n] = await env.KV.get('node:' + n);
+      return Response.json(nodes);
     }
 
     const base = await origin(env);
