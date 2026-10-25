@@ -1,0 +1,14 @@
+{
+  "name": "nexus-runner",
+  "main": "src/index.js",
+  // 2026-10-01 or later: a pending upstream fetch keeps the Durable Object
+  // running after the browser disconnects.
+  "compatibility_date": "2026-10-01",
+  // Model relays live on this same workers.dev account; without this flag a
+  // Worker cannot fetch another Worker on the same zone (error 1042).
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "durable_objects": { "bindings": [{ "name": "JOBS", "class_name": "ReplyJob" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ReplyJob"] }]
+  // Secret (set with `npx wrangler secret put ACCESS_TOKEN`):
+  //   ACCESS_TOKEN - the token Nexus sends in the X-Nexus-Token header
+}
