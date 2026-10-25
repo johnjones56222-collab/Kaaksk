@@ -24,7 +24,7 @@ ENGINE = os.environ.get('ENGINE', 'ct2')
 # GPT4All's prompt template for its GPT-J models.
 SYSTEM = os.environ.get('DEFAULT_SYSTEM', 'The prompt below is a question to answer, a task to complete, or a '
                         'conversation to respond to; decide which and write an appropriate response.')
-STOPS = ['### Prompt', '### Response', '### Instruction']
+STOPS = ['\n###']  # any new ### section (Prompt, Response, Task, ...) ends the reply
 
 THREADS = int(os.environ.get('THREADS') or os.cpu_count())
 torch.set_num_threads(THREADS)
