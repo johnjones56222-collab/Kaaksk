@@ -109,7 +109,7 @@
       <aside class="side">
         <div class="card">
           <h3>Preset · Llama (Max)</h3>
-          <p>Meta's Llama 3.1 / 3.2 models at full precision (plus your GPT-3.5-style fine-tune), run with llama.cpp on every core.</p>
+          <p>Meta's Llama 3.1 / 3.2 models (plus your GPT-3.5-style fine-tune and GPT4All-J) at full precision, on every core.</p>
           <label for="llm-model">Model</label>
           <select id="llm-model" style="width:100%;margin-bottom:10px;font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px">
             <option value="standard">Llama 3.2 1B Instruct (standard)</option>
@@ -117,6 +117,7 @@
             <option value="uncensored-3b">Llama 3.2 3B Instruct Abliterated (uncensored)</option>
             <option value="uncensored-8b">Llama 3.1 8B Instruct Abliterated (uncensored)</option>
             <option value="gpt35style-8b">Llama 3.1 8B Instruct · GPT-3.5 Turbo style (your fine-tune)</option>
+            <option value="gpt4all-j">GPT4All-J v1.0 (GPT-J 6B, Nomic AI)</option>
           </select>
           <p id="llm-model-note"></p>
           <div class="kv">
@@ -124,7 +125,7 @@
             <span>Context</span><b id="llm-ctx">131,072 tokens × 4 slots</b>
             <span>Computer</span><b id="llm-where">this one</b>
             <span>Threads</span><b id="threads">all cores</b>
-            <span>Batch</span><b>4096 / ubatch 1024</b>
+            <span>Batch</span><b id="llm-batch">4096 / ubatch 1024</b>
             <span>Status</span><b><span class="dot" id="llm-dot"></span> <span id="llm-state">checking</span></b>
           </div>
           <div style="display:flex;gap:8px" id="llm-buttons">
@@ -229,6 +230,9 @@ const MODELS = {
     note: 'mlabonne\'s abliterated Llama 3.1 8B: the strongest uncensored model, refusals removed.' },
   'gpt35style-8b': { id: 'llama-3.1-8b-instruct-gpt35style-bf16', weights: 'BF16 (16 GB) + your LoRA (r16)', node: true, slots: 2,
     note: 'Your fine-tune: Llama 3.1 8B Instruct with a LoRA trained on 400 GPT-3.5 Turbo answers, so it writes in GPT-3.5 Turbo\'s style. Standard (not uncensored) base.' },
+  'gpt4all-j': { id: 'gpt4all-j-v1.0', weights: 'BF16 as released (exact), FP32 compute', node: true, ctx: '2,048 tokens × 1 slot',
+    batch: 'CTranslate2, one reply at a time',
+    note: 'Nomic AI\'s GPT4All-J v1.0 (April 2023): GPT-J 6B fine-tuned on GPT4All\'s assistant data. Not a Llama model; llama.cpp can\'t run GPT-J, so it runs on CTranslate2 (about 8 tok/s). Short 2K context.' },
 };
 let llmKey = store.get('llm-model', 'standard');
 if (llmKey === 'uncensored') llmKey = 'uncensored-1b';
@@ -237,7 +241,8 @@ $('llm-model').value = llmKey;
 function showModel() {
   $('llm-weights').textContent = MODELS[llmKey].weights;
   $('llm-model-note').textContent = MODELS[llmKey].note;
-  $('llm-ctx').textContent = '131,072 tokens × ' + (MODELS[llmKey].slots || 4) + ' slots';
+  $('llm-ctx').textContent = MODELS[llmKey].ctx || '131,072 tokens × ' + (MODELS[llmKey].slots || 4) + ' slots';
+  $('llm-batch').textContent = MODELS[llmKey].batch || '4096 / ubatch 1024';
   // Uncensored models each have their own 16 vCPU / 64 GB computer that keeps
   // the model loaded, so there is nothing to start or stop from here.
   $('llm-where').textContent = MODELS[llmKey].node ? 'its own (16 vCPU · 64 GB), always on' : 'this one';

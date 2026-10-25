@@ -24,6 +24,7 @@ https://usenaive-terminal.johnjones56222.workers.dev
   | [huihui-ai/Llama-3.2-3B-Instruct-abliterated](https://huggingface.co/huihui-ai/Llama-3.2-3B-Instruct-abliterated) | F16, 7.2 GB | 128K × 3 slots | `llama-3b-uncensored-max` |
   | [mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated](https://huggingface.co/mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated) | BF16, 16 GB | 128K × 2 slots | `llama-8b-uncensored-max` |
   | Llama 3.1 8B Instruct + GPT-3.5 Turbo style LoRA (your fine-tune) | BF16, 16 GB + LoRA | 128K × 2 slots | `llama-8b-gpt35style-max` |
+  | [nomic-ai/gpt4all-j](https://huggingface.co/nomic-ai/gpt4all-j) v1.0 (GPT-J 6B, not Llama) | BF16 as released, FP32 compute | 2K × 1 | `gpt4all-j-v1-max` |
 
   The GPT-3.5 style model is the fine-tune trained on `video-gen-max`
   (`~/ft/adapter_final`: LoRA r16 / alpha 32 on q/k/v/o, 400 GPT-3.5 Turbo
@@ -32,6 +33,14 @@ https://usenaive-terminal.johnjones56222.workers.dev
   BF16 (the same base weights) with the adapter converted by llama.cpp's
   `convert_lora_to_gguf.py` and applied with `--lora` (`LORA_FILE` in the
   node's env).
+
+  GPT4All-J is GPT-J, which llama.cpp can't run, so its node uses
+  `model-node/hf_server.py` (`SERVER_SCRIPT` in the node's env) instead of
+  llama-server: the same OpenAI-style API and MODEL_KEY auth, serving a
+  CTranslate2 conversion of the v1.0 revision (commit `7e9adc0`). The v1.0
+  files hold BF16 weights; CTranslate2 computes in FP32, which is exact for
+  them, at about 8 tok/s (plain PyTorch managed 0.7 tok/s on these AVX2-only
+  CPUs). It uses GPT4All's `### Prompt:` / `### Response:` template.
 
   Slots are as many full 128K contexts as fit in 64 GB next to the weights.
   The 8B streams at about 13-17 tok/s.
@@ -45,10 +54,11 @@ Other apps can use the model as an OpenAI-compatible API:
 with `Authorization: Bearer <WEB_PASSWORD>` (CORS is open on `/llm/*` and
 `/api/llama/*`). The `model` field picks one of `llama-3.2-1b-instruct-f16`,
 `llama-3.2-1b-instruct-abliterated-f16`, `llama-3.2-3b-instruct-abliterated-f16`
-`llama-3.1-8b-instruct-abliterated-bf16` or `llama-3.1-8b-instruct-gpt35style-bf16`
+`llama-3.1-8b-instruct-abliterated-bf16`, `llama-3.1-8b-instruct-gpt35style-bf16`
+or `gpt4all-j-v1.0`
 (`GET /llm/v1/models` lists them).
 The standard model loads on the first request; the nodes keep theirs loaded.
-Nexus v37.41 uses this for its "SANDBOX POWERED LLM" section (`sbx/` ids).
+Nexus v37.42 uses this for its "SANDBOX POWERED LLM" section (`sbx/` ids).
 
 The whole site sits behind one password (`WEB_PASSWORD`). Anyone with it gets
 a full shell on the computer, so share it carefully.
@@ -97,6 +107,9 @@ MODEL_KEY, so the nodes refuse anyone else.
 - `worker/`: the Cloudflare Worker (KV binding `KV`, secret `REGISTER_SECRET`).
 - `model-node/setup.sh`, `model-node/node-start.sh`: a model node's one-time
   setup and its server + tunnel supervisor.
+- `model-node/setup-hf.sh`, `model-node/hf_server.py`: setup and server for a
+  node whose model llama.cpp can't load (env: `HF_REPO`, `HF_REVISION`,
+  `SERVER_SCRIPT=hf_server.py`, `CTX`, `ENGINE=ct2`).
 
 ## Setting up a computer
 
