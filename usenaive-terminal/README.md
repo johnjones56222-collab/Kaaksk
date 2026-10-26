@@ -100,7 +100,9 @@ MODEL_KEY, so the nodes refuse anyone else.
   `node-start.sh`. A quick tunnel can die on Cloudflare's side ("Tunnel not
   found") while cloudflared keeps running; every 20 seconds the watchdog
   checks `<tunnel>/health` and after 3 failures (~1 minute) kills cloudflared
-  so a fresh tunnel is started and registered. Log: `~/watchdog.log`.
+  so a fresh tunnel is started and registered. Usenaive also suspends
+  computers for hours at a time, which kills their tunnels; when the clock jumps
+  between checks the watchdog restarts cloudflared at once. Log: `~/watchdog.log`.
 - `sandbox/usenaive-terminal.service`, `model-node/llama-node.service`:
   systemd units that start the hub / a node at boot, since Usenaive can
   restart a computer on its own.
