@@ -17,12 +17,15 @@ was 40 GB).
 | `llama-3b-uncensored-max` | `snp_d4f2ac833ea641df93d4607a3a64963e` | 2026-10-25 19:42 |
 | `llama-8b-uncensored-max` | `snp_bfdf9581c8c7494d89407197fa2d416c` | 2026-10-25 19:43 |
 | `llama-8b-gpt35style-max` | `snp_cd7327d77aa54d89ac59d446f3372c61` | 2026-10-25 17:55 |
+| `llama-8b-gpt35style-v2-max` | `snp_77164c55a16c4ad183fd8476e9f1842f` | 2026-10-26 05:40 |
 | `gpt4all-j-v1-max` | `snp_67f3b39fb88e401a8477e8b99bd4ba07` | 2026-10-25 17:56 |
 | `video-gen-max` | `snp_fa2e12bf4cd444fba44148702c238f51` | 2026-10-25 17:54 |
 | `math-unlearning` | `snp_911799658ec74b9181b39ec567f78fb5` | 2026-10-25 18:01 |
 
-The `gpt4all-j-v1-max` snapshot predates the `### ` stop fix in
-`model-node/hf_server.py`; copy that file to `~/node/` on a restored node.
+Snapshots taken before 2026-10-26 have the older `tunnel-watchdog.sh` (no
+check for waking from a suspension), and the `gpt4all-j-v1-max` one also
+predates the `###` stop fix in `model-node/hf_server.py`; copy those files to
+`~/node/` (or `~/usenaive-terminal/` on the hub) on a restored computer.
 
 A restored hub or node needs nothing else: `usenaive-terminal.service` /
 `llama-node.service` start at boot, open a new tunnel and register it with
@@ -36,10 +39,11 @@ Everything except the downloaded weights is in this repository:
 - `README.md` has the setup for the hub and for model nodes (weight URLs and
   env files included).
 - `../backups/gpt35style-finetune/` is a copy of video-gen-max's `~/ft`: the
-  finished LoRA (`adapter_final/`), the v2 training state's adapter, the
+  finished LoRA (`adapter_final/`), a mid-training v2 checkpoint, the
   training scripts, data and logs. Convert the adapter with llama.cpp's
   `convert_lora_to_gguf.py` (base `meta-llama/Llama-3.1-8B-Instruct`) and set
-  `LORA_FILE` on the node.
+  `LORA_FILE` on the node. v2's finished adapter is `adapter_v2/` there too,
+  with `train2.py` and `test_results_v2.json`.
 - The Worker is `worker/`; its KV namespace and `REGISTER_SECRET` secret live
   in the Cloudflare account and don't depend on any computer.
 

@@ -24,6 +24,7 @@ https://usenaive-terminal.johnjones56222.workers.dev
   | [huihui-ai/Llama-3.2-3B-Instruct-abliterated](https://huggingface.co/huihui-ai/Llama-3.2-3B-Instruct-abliterated) | F16, 7.2 GB | 128K × 3 slots | `llama-3b-uncensored-max` |
   | [mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated](https://huggingface.co/mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated) | BF16, 16 GB | 128K × 2 slots | `llama-8b-uncensored-max` |
   | Llama 3.1 8B Instruct + GPT-3.5 Turbo style LoRA (your fine-tune) | BF16, 16 GB + LoRA | 128K × 2 slots | `llama-8b-gpt35style-max` |
+  | Llama 3.1 8B Instruct + GPT-3.5 Turbo style LoRA v2 | BF16, 16 GB + LoRA | 128K × 2 slots | `llama-8b-gpt35style-v2-max` |
   | [nomic-ai/gpt4all-j](https://huggingface.co/nomic-ai/gpt4all-j) v1.0 (GPT-J 6B, not Llama) | BF16 as released, FP32 compute | 2K × 1 | `gpt4all-j-v1-max` |
 
   The GPT-3.5 style model is the fine-tune trained on `video-gen-max`
@@ -33,6 +34,11 @@ https://usenaive-terminal.johnjones56222.workers.dev
   BF16 (the same base weights) with the adapter converted by llama.cpp's
   `convert_lora_to_gguf.py` and applied with `--lora` (`LORA_FILE` in the
   node's env).
+
+  v2 (`~/ft/adapter_v2`, `train2.py`) is that adapter trained further on 718
+  more answers from the same dataset (1,118 in all, 90 steps). Its node is a
+  copy of the v1 node with `LORA_FILE=gpt35style-v2-lora-f32.gguf` and its
+  own `NODE_NAME` / `ALIAS`.
 
   GPT4All-J is GPT-J, which llama.cpp can't run, so its node uses
   `model-node/hf_server.py` (`SERVER_SCRIPT` in the node's env) instead of
@@ -54,11 +60,11 @@ Other apps can use the model as an OpenAI-compatible API:
 with `Authorization: Bearer <WEB_PASSWORD>` (CORS is open on `/llm/*` and
 `/api/llama/*`). The `model` field picks one of `llama-3.2-1b-instruct-f16`,
 `llama-3.2-1b-instruct-abliterated-f16`, `llama-3.2-3b-instruct-abliterated-f16`
-`llama-3.1-8b-instruct-abliterated-bf16`, `llama-3.1-8b-instruct-gpt35style-bf16`
-or `gpt4all-j-v1.0`
+`llama-3.1-8b-instruct-abliterated-bf16`, `llama-3.1-8b-instruct-gpt35style-bf16`,
+`llama-3.1-8b-instruct-gpt35style-v2-bf16` or `gpt4all-j-v1.0`
 (`GET /llm/v1/models` lists them).
 The standard model loads on the first request; the nodes keep theirs loaded.
-Nexus v37.42 uses this for its "SANDBOX POWERED LLM" section (`sbx/` ids).
+Nexus v37.43 uses this for its "SANDBOX POWERED LLM" section (`sbx/` ids).
 
 The whole site sits behind one password (`WEB_PASSWORD`). Anyone with it gets
 a full shell on the computer, so share it carefully.
