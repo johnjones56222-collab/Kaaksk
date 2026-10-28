@@ -121,6 +121,7 @@
             <option value="gpt35style-v3-8b">Llama 3.1 8B Instruct · GPT-3.5 Turbo style v3 (your fine-tune, 4,394 answers)</option>
             <option value="gpt35style-v4-8b">Llama 3.1 8B Instruct · GPT-3.5 Turbo style v4 (your fine-tune, 13,984 answers)</option>
             <option value="gpt4all-j">GPT4All-J v1.0 (GPT-J 6B, Nomic AI)</option>
+            <option value="monadgpt">MonadGPT 7B (Mistral, talks like the 17th century)</option>
           </select>
           <p id="llm-model-note"></p>
           <div class="kv">
@@ -242,6 +243,9 @@ const MODELS = {
   'gpt4all-j': { id: 'gpt4all-j-v1.0', weights: 'BF16 as released (exact), FP32 compute', node: true, ctx: '2,048 tokens × 1 slot',
     batch: 'CTranslate2, one reply at a time',
     note: 'Nomic AI\'s GPT4All-J v1.0 (April 2023): GPT-J 6B fine-tuned on GPT4All\'s assistant data. Not a Llama model; llama.cpp can\'t run GPT-J, so it runs on CTranslate2 (about 8 tok/s). Short 2K context.' },
+  monadgpt: { id: 'monadgpt-7b-bf16', weights: 'BF16 as released (full precision, 14.5 GB)', node: true, ctx: '32,768 tokens × 8 slots',
+    system: 'You are MonadGPT, a very old chatbot from the 17th century. Please answer the questions using an archaic language',
+    note: 'Pierre-Carl Langlais\'s MonadGPT: Mistral 7B (OpenHermes 2) fine-tuned on 11,000 early modern books in English, French and Latin, so it answers like a 17th-century writer, with the science of the time. Not a Llama model. While the system prompt is the default, its own (\'You are MonadGPT, a very old chatbot from the 17th century...\') is sent instead.' },
 };
 let llmKey = store.get('llm-model', 'standard');
 if (llmKey === 'uncensored') llmKey = 'uncensored-1b';
@@ -327,7 +331,9 @@ $('composer').onsubmit = async (e) => {
   history.push(reply);
   render();
   const msgEl = $('msgs').lastChild;
-  const messages = [{ role: 'system', content: $('sys').value }, ...history.slice(0, -1).filter((m) => !m.note).map(({ role, content }) => ({ role, content }))];
+  // A model with its own system prompt (MonadGPT) uses it in place of the default one.
+  const sys = MODELS[llmKey].system && $('sys').value.trim() === 'You are a helpful assistant.' ? MODELS[llmKey].system : $('sys').value;
+  const messages = [{ role: 'system', content: sys }, ...history.slice(0, -1).filter((m) => !m.note).map(({ role, content }) => ({ role, content }))];
   const t0 = performance.now();
   let tokens = 0;
   try {

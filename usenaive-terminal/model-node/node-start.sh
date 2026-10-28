@@ -4,6 +4,8 @@
 # find it. llama-server only answers requests carrying MODEL_KEY. LORA_FILE
 # (optional) is a GGUF LoRA adapter in ~/models applied on top of the model.
 # SERVER_SCRIPT (optional) runs that Python server instead of llama-server.
+# CTX (optional) is the context per slot, 131072 by default; set it to the
+# model's own window for models trained on less (MonadGPT: 32768).
 set -a; . "$HOME/.llama-node.env"; set +a
 PORT=8080
 # Leave 2 cores and scheduling priority to cloudflared: with every core busy
@@ -18,7 +20,7 @@ export THREADS=$(( $(nproc) > 4 ? $(nproc) - 2 : $(nproc) ))
   nice -n 10 "$HOME/llama.cpp/build/bin/llama-server" \
     --model "$HOME/models/$MODEL_FILE" --alias "$ALIAS" \
     --host 127.0.0.1 --port "$PORT" --api-key "$MODEL_KEY" \
-    --ctx-size $((131072 * PARALLEL)) --parallel "$PARALLEL" \
+    --ctx-size $((${CTX:-131072} * PARALLEL)) --parallel "$PARALLEL" \
     --threads "$THREADS" --threads-batch "$THREADS" \
     --batch-size 4096 --ubatch-size 1024 \
     --flash-attn on --jinja ${LORA_FILE:+--lora "$HOME/models/$LORA_FILE"} >> "$HOME/llama.log" 2>&1

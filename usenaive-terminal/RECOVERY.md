@@ -20,6 +20,7 @@ was 40 GB).
 | `llama-8b-gpt35style-v2-max` | `snp_77164c55a16c4ad183fd8476e9f1842f` | 2026-10-26 05:40 |
 | `llama-8b-gpt35style-v3-max` | `snp_cbd2354591b3463b89ee876eda253d97` | 2026-10-28 09:54 |
 | `llama-8b-gpt35style-v4-max` | `snp_4f7407f8a7f247e2a1326a59da9d4a16` | 2026-10-28 16:15 |
+| `monadgpt-7b-max` | `snp_172cf516152d4f71a0548d256fe1d317` | 2026-10-28 20:11 |
 | `gpt4all-j-v1-max` | `snp_67f3b39fb88e401a8477e8b99bd4ba07` | 2026-10-25 17:56 |
 | `video-gen-max` (gone from the account by 2026-10-28) | `snp_fa2e12bf4cd444fba44148702c238f51` | 2026-10-25 17:54 |
 | `math-unlearning` | `snp_911799658ec74b9181b39ec567f78fb5` | 2026-10-25 18:01 |

@@ -26,12 +26,16 @@ const MODELS = {
   'gpt35style-v3-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v3-bf16', node: 'gpt35style-v3-8b' },
   'gpt35style-v4-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v4-bf16', node: 'gpt35style-v4-8b' },
   'gpt4all-j': { id: 'gpt4all-j-v1.0', node: 'gpt4all-j' },
+  // MonadGPT stays in character only with its own system prompt (model card).
+  monadgpt: { id: 'monadgpt-7b-bf16', node: 'monadgpt-7b',
+    system: 'You are MonadGPT, a very old chatbot from the 17th century. Please answer the questions using an archaic language' },
 };
 MODELS.uncensored = MODELS['uncensored-1b']; // the page's old key
 const pickModel = (name) => {
   const n = String(name || '').toLowerCase();
   return Object.values(MODELS).find((m) => n === m.id || n.endsWith('/' + m.id)) || MODELS[n]
     || (/gpt4all/.test(n) ? MODELS['gpt4all-j'] : null)
+    || (/monad/.test(n) ? MODELS.monadgpt : null)
     || (/gpt-?3\.?5|gpt35/.test(n) ? MODELS[/v4/.test(n) ? 'gpt35style-v4-8b' : /v3/.test(n) ? 'gpt35style-v3-8b' : /v2/.test(n) ? 'gpt35style-v2-8b' : 'gpt35style-8b'] : null)
     || (/abliterat|uncensor/.test(n) ? MODELS[/8b/.test(n) ? 'uncensored-8b' : /3b/.test(n) ? 'uncensored-3b' : 'uncensored-1b'] : MODELS.standard);
 };
@@ -213,9 +217,19 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { object: 'list', data: [...new Set(Object.values(MODELS))].map((m) => ({ id: m.id, object: 'model', owned_by: m.node ? 'node:' + m.node : 'sandbox' })) });
     }
     // Read the body to route on its `model`, then replay it upstream.
-    const body = req.method === 'POST' ? await readBody(req, 50e6) : ''; // a full 128K-token chat is a few MB
+    let body = req.method === 'POST' ? await readBody(req, 50e6) : ''; // a full 128K-token chat is a few MB
     let target = model;
-    if (body) { try { target = pickModel(JSON.parse(body).model); } catch {} }
+    if (body) {
+      try {
+        const j = JSON.parse(body);
+        target = pickModel(j.model);
+        // A model with its own system prompt gets it unless the request brings one.
+        if (target.system && Array.isArray(j.messages) && !j.messages.some((m) => m.role === 'system')) {
+          j.messages.unshift({ role: 'system', content: target.system });
+          body = JSON.stringify(j);
+        }
+      } catch {}
+    }
     if (req.method === 'POST' && !(await ensureLlama(target))) {
       return send(res, 503, { error: target.node ? `the ${target.node} computer is offline or still loading` : 'llama-server did not come up; see ~/' + target.log + ' on the sandbox' });
     }

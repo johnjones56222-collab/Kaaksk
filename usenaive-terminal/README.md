@@ -28,6 +28,7 @@ https://usenaive-terminal.johnjones56222.workers.dev
   | Llama 3.1 8B Instruct + GPT-3.5 Turbo style LoRA v3 (merged) | BF16, 16 GB | 128K × 2 slots | `llama-8b-gpt35style-v3-max` |
   | Llama 3.1 8B Instruct + GPT-3.5 Turbo style LoRA v4 (merged) | BF16, 16 GB | 128K × 2 slots | `llama-8b-gpt35style-v4-max` |
   | [nomic-ai/gpt4all-j](https://huggingface.co/nomic-ai/gpt4all-j) v1.0 (GPT-J 6B, not Llama) | BF16 as released, FP32 compute | 2K × 1 | `gpt4all-j-v1-max` |
+  | [Pclanglais/MonadGPT](https://huggingface.co/Pclanglais/MonadGPT) (Mistral 7B, not Llama) | BF16 as released, 14.5 GB | 32K × 8 slots | `monadgpt-7b-max` |
 
   The GPT-3.5 style model is the fine-tune trained on `video-gen-max`
   (`~/ft/adapter_final`: LoRA r16 / alpha 32 on q/k/v/o, 400 GPT-3.5 Turbo
@@ -66,6 +67,15 @@ https://usenaive-terminal.johnjones56222.workers.dev
   them, at about 8 tok/s (plain PyTorch managed 0.7 tok/s on these AVX2-only
   CPUs). It uses GPT4All's `### Prompt:` / `### Response:` template.
 
+  MonadGPT is OpenHermes 2 (Mistral 7B) fine-tuned on 11,000 early modern
+  books in English, French and Latin; it answers in 17th-century style. Its
+  node converts the BF16 checkpoint with `convert_hf_to_gguf.py --outtype
+  bf16` (the GGUF keeps its ChatML template) and runs with `CTX=32768` (the
+  model's window) and `PARALLEL=8`. It needs its model card's system prompt
+  to stay in character, so the hub adds it (`system` in `MODELS`) when a
+  request has no system message, and the page sends it in place of the
+  default "You are a helpful assistant.". About 6 tok/s on its host.
+
   Slots are as many full 128K contexts as fit in 64 GB next to the weights.
   The 8B streams at about 13-17 tok/s.
 - **System**: CPU, RAM, disk, load and uptime.
@@ -80,11 +90,11 @@ with `Authorization: Bearer <WEB_PASSWORD>` (CORS is open on `/llm/*` and
 `llama-3.2-1b-instruct-abliterated-f16`, `llama-3.2-3b-instruct-abliterated-f16`
 `llama-3.1-8b-instruct-abliterated-bf16`, `llama-3.1-8b-instruct-gpt35style-bf16`,
 `llama-3.1-8b-instruct-gpt35style-v2-bf16`, `llama-3.1-8b-instruct-gpt35style-v3-bf16`,
-`llama-3.1-8b-instruct-gpt35style-v4-bf16`
-or `gpt4all-j-v1.0`
+`llama-3.1-8b-instruct-gpt35style-v4-bf16`, `gpt4all-j-v1.0`
+or `monadgpt-7b-bf16`
 (`GET /llm/v1/models` lists them).
 The standard model loads on the first request; the nodes keep theirs loaded.
-Nexus v37.47 uses this for its "SANDBOX POWERED LLM" section (`sbx/` ids).
+Nexus v37.48 uses this for its "SANDBOX POWERED LLM" section (`sbx/` ids).
 
 The whole site sits behind one password (`WEB_PASSWORD`). Anyone with it gets
 a full shell on the computer, so share it carefully.
@@ -184,6 +194,7 @@ ALIAS=llama-3.1-8b-instruct-abliterated-bf16 # the API model id
 MODEL_FILE=Meta-Llama-3.1-8B-Instruct-abliterated-bf16.gguf
 MODEL_URL=https://huggingface.co/mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated-GGUF/resolve/main/meta-llama-3.1-8b-instruct-abliterated.bf16.gguf
 PARALLEL=2                                   # 128K-token slots
+# CTX=32768                                  # context per slot if not 131072
 # LORA_FILE=adapter.gguf                     # optional LoRA in ~/models
 MODEL_KEY=...                                # same as the hub's
 WORKER_URL=https://usenaive-terminal.johnjones56222.workers.dev
