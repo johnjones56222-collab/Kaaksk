@@ -1,0 +1,48 @@
+{
+ "training": {
+  "engine": "unsloth",
+  "gpus": 2,
+  "steps_done": 550,
+  "max_steps": 550,
+  "train_minutes": 67.1,
+  "examples_trained": 4394
+ },
+ "gpt35_reference": {
+  "bold": 0.042,
+  "headers": 0.0,
+  "numbered_list": 0.0,
+  "bullets": 0.0,
+  "as_an_ai": 0.083,
+  "confidence_line": 0.0,
+  "gpt35_opener": 0.0,
+  "avg_words": 200.5
+ },
+ "finetuned_v3": {
+  "bold": 0.0,
+  "headers": 0.0,
+  "numbered_list": 0.583,
+  "bullets": 0.125,
+  "as_an_ai": 0.0,
+  "confidence_line": 0.0,
+  "gpt35_opener": 0.0,
+  "avg_words": 197.5
+ },
+ "base_llama": {
+  "bold": 0.792,
+  "headers": 0.083,
+  "numbered_list": 0.625,
+  "bullets": 0.167,
+  "as_an_ai": 0.0,
+  "confidence_line": 0.0,
+  "gpt35_opener": 0.0,
+  "avg_words": 195.6
+ },
+ "style_distance_to_gpt35 (lower=closer)": {
+  "finetuned_v3": 0.121,
+  "base_llama": 0.247
+ },
+ "word_overlap_F1_with_gpt35": {
+  "finetuned_v3": 0.461,
+  "base_llama": 0.436
+ }
+}

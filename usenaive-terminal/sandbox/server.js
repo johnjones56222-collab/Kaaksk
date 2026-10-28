@@ -23,6 +23,7 @@ const MODELS = {
   'uncensored-8b': { id: 'llama-3.1-8b-instruct-abliterated-bf16', node: 'uncensored-8b' },
   'gpt35style-8b': { id: 'llama-3.1-8b-instruct-gpt35style-bf16', node: 'gpt35style-8b' },
   'gpt35style-v2-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v2-bf16', node: 'gpt35style-v2-8b' },
+  'gpt35style-v3-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v3-f16', node: 'gpt35style-v3-8b' },
   'gpt4all-j': { id: 'gpt4all-j-v1.0', node: 'gpt4all-j' },
 };
 MODELS.uncensored = MODELS['uncensored-1b']; // the page's old key
@@ -30,7 +31,7 @@ const pickModel = (name) => {
   const n = String(name || '').toLowerCase();
   return Object.values(MODELS).find((m) => n === m.id || n.endsWith('/' + m.id)) || MODELS[n]
     || (/gpt4all/.test(n) ? MODELS['gpt4all-j'] : null)
-    || (/gpt-?3\.?5|gpt35/.test(n) ? MODELS[/v2/.test(n) ? 'gpt35style-v2-8b' : 'gpt35style-8b'] : null)
+    || (/gpt-?3\.?5|gpt35/.test(n) ? MODELS[/v3/.test(n) ? 'gpt35style-v3-8b' : /v2/.test(n) ? 'gpt35style-v2-8b' : 'gpt35style-8b'] : null)
     || (/abliterat|uncensor/.test(n) ? MODELS[/8b/.test(n) ? 'uncensored-8b' : /3b/.test(n) ? 'uncensored-3b' : 'uncensored-1b'] : MODELS.standard);
 };
 

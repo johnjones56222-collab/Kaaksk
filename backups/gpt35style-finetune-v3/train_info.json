@@ -1,0 +1,8 @@
+{
+ "engine": "unsloth",
+ "gpus": 2,
+ "steps_done": 550,
+ "max_steps": 550,
+ "train_minutes": 67.1,
+ "examples_trained": 4394
+}
