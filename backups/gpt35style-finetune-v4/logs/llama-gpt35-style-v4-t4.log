@@ -1,0 +1,20 @@
+[{"stream_name":"stdout","time":0.751811685,"data":"[   0.0m] $ nvidia-smi --query-gpu=index,name,memory.total --format=csv\n"}
+,{"stream_name":"stdout","time":0.787977526,"data":"index, name, memory.total [MiB]\n"}
+,{"stream_name":"stdout","time":0.788009656,"data":"0, Tesla T4, 15360 MiB\n"}
+,{"stream_name":"stdout","time":0.788016798,"data":"1, Tesla T4, 15360 MiB\n"}
+,{"stream_name":"stdout","time":0.795909951,"data":"[   0.0m] $ pip install -q unsloth \u003e /tmp/pip.log 2\u003e\u00261\n"}
+,{"stream_name":"stderr","time":50.533170814,"data":"\rFetching 8 files:   0%|          | 0/8 [00:00\u003c?, ?it/s]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":76.498262771,"data":"\rFetching 8 files:  12%|█▎        | 1/8 [00:00\u003c00:00,  8.06it/s]\rFetching 8 files:  75%|███████▌  | 6/8 [00:00\u003c00:00, 22.93it/s]\rFetching 8 files:  88%|████████▊ | 7/8 [00:19\u003c00:00, 22.93it/s]\rFetching 8 files: 100%|██████████| 8/8 [00:26\u003c00:00,  4.33s/it]\rFetching 8 files: 100%|██████████| 8/8 [00:26\u003c00:00,  3.26s/it]\n"}
+,{"stream_name":"stderr","time":89.721821561,"data":"\rGenerating train split:   0%|          | 0/15732 [00:00\u003c?, ? examples/s]\rGenerating train split:  64%|██████▎   | 10000/15732 [00:00\u003c00:00, 69802.69 examples/s]\rGenerating train split: 100%|██████████| 15732/15732 [00:00\u003c00:00, 89698.10 examples/s]\n"}
+,{"stream_name":"stderr","time":89.730711653,"data":"\rGenerating test split:   0%|          | 0/829 [00:00\u003c?, ? examples/s]\rGenerating test split: 100%|██████████| 829/829 [00:00\u003c00:00, 100898.93 examples/s]\n"}
+,{"stream_name":"stdout","time":90.816216067,"data":"[   1.5m] data {'source_rows': 15732, 'kept': 14024, 'train': 13984, 'heldout': 40, 'skipped': {'multi_turn': 0, 'empty': 0, 'confidence': 1704, 'dup_prompt': 4}, 'train_label_false': 8133}\n"}
+,{"stream_name":"stdout","time":90.816505233,"data":"[   1.5m] $ torchrun --standalone --nproc_per_node=2 /tmp/ddp_train.py \u003e /kaggle/working/torchrun_unsloth_x2.log 2\u003e\u00261\n"}
+,{"stream_name":"stdout","time":13262.914013553,"data":"[ 221.0m] attempt unsloth x 2 exit code 0\n"}
+,{"stream_name":"stdout","time":13262.920185184,"data":"[ 221.0m] ALL_DONE\n"}
+,{"stream_name":"stderr","time":13265.943478146,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":13265.943511294,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":13266.159260201,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":13266.159284656,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":13266.909269644,"data":"[NbConvertApp] Converting notebook __script__.ipynb to html\n"}
+,{"stream_name":"stderr","time":13267.415539458,"data":"[NbConvertApp] Writing 305571 bytes to __results__.html\n"}
+]

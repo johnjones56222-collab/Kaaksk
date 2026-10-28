@@ -1,0 +1,26 @@
+{
+ "phase": "done",
+ "ok": true,
+ "engine": "unsloth",
+ "gpus": 2,
+ "steps_done": 1748,
+ "max_steps": 1748,
+ "train_minutes": 217.9,
+ "examples_trained": 13984,
+ "max_len": 2048,
+ "truncated": 21,
+ "data": {
+  "source_rows": 15732,
+  "kept": 14024,
+  "train": 13984,
+  "heldout": 40,
+  "skipped": {
+   "multi_turn": 0,
+   "empty": 0,
+   "confidence": 1704,
+   "dup_prompt": 4
+  },
+  "train_label_false": 8133
+ },
+ "elapsed_min": 221.0
+}

@@ -1,0 +1,15 @@
+[   0.7m] v4 /kaggle/input/notebooks/yousefalhindi8282/llama-gpt35-style-v4-t4/adapter_v4 v3 /kaggle/input/notebooks/yousefalhindi8282/llama-gpt35-style-v3/adapter_v3 held-out 40
+[   3.7m] v4 batch done 11 / 43
+[   4.7m] v4 batch done 22 / 43
+[   5.8m] v4 batch done 33 / 43
+[   7.1m] v4 batch done 43 / 43
+[   8.1m] v3 batch done 11 / 43
+[   9.1m] v3 batch done 22 / 43
+[  10.2m] v3 batch done 33 / 43
+[  11.8m] v3 batch done 43 / 43
+[  12.7m] base batch done 11 / 43
+[  13.6m] base batch done 22 / 43
+[  14.6m] base batch done 33 / 43
+[  16.0m] base batch done 43 / 43
+[  16.3m] metrics {"n_heldout": 40, "max_new_tokens": 512, "feature_share_percent": {"gpt35_reference": {"bold": 0.0, "headings": 0.0, "numbered_list": 42.5, "bullets": 10.0, "as_an_ai": 5.0, "confidence_line": 0.0, "gpt35_opener": 5.0, "avg_words": 208.8}, "finetuned_v4": {"bold": 2.5, "headings": 0.0, "numbered_list": 50.0, "bullets": 10.0, "as_an_ai": 5.0, "confidence_line": 0.0, "gpt35_opener": 5.0, "avg_words": 215.8}, "finetuned_v3": {"bold": 5.0, "headings": 0.0, "numbered_list": 45.0, "bullets": 5.0, "as_an_ai": 2.5, "confidence_line": 0.0, "gpt35_opener": 0.0, "avg_words": 220.1}, "base_llama": {"bold": 50.0, "headings": 2.5, "numbered_list": 40.0, "bullets": 22.5, "as_an_ai": 0.0, "confidence_line": 0.0, "gpt35_opener": 0.0, "avg_words": 229.2}}, "avg_feature_gap_from_gpt35_points (lower=closer)": {"finetuned_v4": 1.4, "finetuned_v3": 2.9, "base_llama": 11.1}, "word_overlap_F1_with_gpt35": {"finetuned_v4": 0.478, "finetuned_v3": 0.455, "base_llama": 0.36}, "subset_not_in_v3_training": {"n": 28, "feature_share_percent": {"gpt35_reference": {"bold": 0.0, "headings": 0.0, "numbered_list": 28.6, "bullets": 10.7, "as_an_ai": 7.1, "confidence_line": 0.0, "gpt35_opener": 3.6, "avg_words": 159.5}, "finetuned_v4": {"bold": 3.6, "headings": 0.0, "numbered_list": 35.7, "bullets": 7.1, "as_an_ai": 7.1, "confidence_line": 0.0, "gpt35_opener": 7.1, "avg_words": 165.8}, "finetuned_v3": {"bold": 7.1, "headings": 0.0, "numbered_list": 35.7, "bullets": 3.6, "as_an_ai": 3.6, "confidence_line": 0.0, "gpt35_opener": 0.0, "avg_words": 172.0}, "base_llama": {"bold": 35.7, "headings": 3.6, "numbered_list": 25.0, "bullets": 21.4, "as_an_ai": 0.0, "confidence_line": 0.0, "gpt35_opener": 0.0, "avg_words": 193.5}}, "avg_feature_gap_from_gpt35_points": {"finetuned_v4": 2.5, "finetuned_v3": 4.1, "base_llama": 9.2}, "word_overlap_F1_with_gpt35": {"finetuned_v4": 0.477, "finetuned_v3": 0.443, "base_llama": 0.343}}}
+[  16.3m] ALL_DONE

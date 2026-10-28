@@ -1,0 +1,13 @@
+{
+ "source_rows": 15732,
+ "kept": 14024,
+ "train": 13984,
+ "heldout": 40,
+ "skipped": {
+  "multi_turn": 0,
+  "empty": 0,
+  "confidence": 1704,
+  "dup_prompt": 4
+ },
+ "train_label_false": 8133
+}

@@ -1,0 +1,14 @@
+{
+ "finetuned_v4": {
+  "repeat": 2,
+  "hit_limit": 13
+ },
+ "finetuned_v3": {
+  "repeat": 1,
+  "hit_limit": 14
+ },
+ "base_llama": {
+  "repeat": 1,
+  "hit_limit": 20
+ }
+}

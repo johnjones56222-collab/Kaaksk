@@ -19,6 +19,7 @@ was 40 GB).
 | `llama-8b-gpt35style-max` | `snp_cd7327d77aa54d89ac59d446f3372c61` | 2026-10-25 17:55 |
 | `llama-8b-gpt35style-v2-max` | `snp_77164c55a16c4ad183fd8476e9f1842f` | 2026-10-26 05:40 |
 | `llama-8b-gpt35style-v3-max` | `snp_cbd2354591b3463b89ee876eda253d97` | 2026-10-28 09:54 |
+| `llama-8b-gpt35style-v4-max` | `snp_4f7407f8a7f247e2a1326a59da9d4a16` | 2026-10-28 16:15 |
 | `gpt4all-j-v1-max` | `snp_67f3b39fb88e401a8477e8b99bd4ba07` | 2026-10-25 17:56 |
 | `video-gen-max` (gone from the account by 2026-10-28) | `snp_fa2e12bf4cd444fba44148702c238f51` | 2026-10-25 17:54 |
 | `math-unlearning` | `snp_911799658ec74b9181b39ec567f78fb5` | 2026-10-25 18:01 |
@@ -52,6 +53,9 @@ Everything except the downloaded weights is in this repository:
   it with `sha256sum -c adapter_model.safetensors.sha256`. The original
   package is also in the model vault as
   `llama31-gpt35style-lora-v3.tar.gz`.
+- `../backups/gpt35style-finetune-v4/` holds v4 the same way (adapter in two
+  parts, scripts, logs, metrics and the Q&A eval); the original package is
+  `llama31-gpt35style-lora-v4.tar.gz` in the vault.
 - The Worker is `worker/`; its KV namespace and `REGISTER_SECRET` secret live
   in the Cloudflare account and don't depend on any computer.
 

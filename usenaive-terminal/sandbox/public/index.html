@@ -119,6 +119,7 @@
             <option value="gpt35style-8b">Llama 3.1 8B Instruct · GPT-3.5 Turbo style (your fine-tune)</option>
             <option value="gpt35style-v2-8b">Llama 3.1 8B Instruct · GPT-3.5 Turbo style v2 (your fine-tune, more training)</option>
             <option value="gpt35style-v3-8b">Llama 3.1 8B Instruct · GPT-3.5 Turbo style v3 (your fine-tune, 4,394 answers)</option>
+            <option value="gpt35style-v4-8b">Llama 3.1 8B Instruct · GPT-3.5 Turbo style v4 (your fine-tune, 13,984 answers)</option>
             <option value="gpt4all-j">GPT4All-J v1.0 (GPT-J 6B, Nomic AI)</option>
           </select>
           <p id="llm-model-note"></p>
@@ -236,6 +237,8 @@ const MODELS = {
     note: 'Version 2 of your fine-tune: the first LoRA trained further on 718 more GPT-3.5 Turbo answers (1,118 in all), for a closer GPT-3.5 Turbo style. Standard (not uncensored) base.' },
   'gpt35style-v3-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v3-bf16', weights: 'BF16 (16 GB), your LoRA v3 (r16, all layers) merged in', node: true, slots: 2,
     note: 'Version 3 of your fine-tune: a new LoRA on every layer (attention and MLP) trained with Unsloth on 2 GPUs over 4,394 GPT-3.5 Turbo answers. In its own test it is about twice as close to GPT-3.5 Turbo\'s style as plain Llama. Standard (not uncensored) base.' },
+  'gpt35style-v4-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v4-bf16', weights: 'BF16 (16 GB), your LoRA v4 (r16, all layers) merged in', node: true, slots: 2,
+    note: 'Version 4 of your fine-tune: an all-layer LoRA trained for a full epoch over 13,984 GPT-3.5 Turbo answers (the whole dataset) on 2 GPUs. In its own test it is the closest to GPT-3.5 Turbo\'s style so far (1.4-point gap vs 2.9 for v3 and 11.1 for plain Llama). Standard (not uncensored) base.' },
   'gpt4all-j': { id: 'gpt4all-j-v1.0', weights: 'BF16 as released (exact), FP32 compute', node: true, ctx: '2,048 tokens × 1 slot',
     batch: 'CTranslate2, one reply at a time',
     note: 'Nomic AI\'s GPT4All-J v1.0 (April 2023): GPT-J 6B fine-tuned on GPT4All\'s assistant data. Not a Llama model; llama.cpp can\'t run GPT-J, so it runs on CTranslate2 (about 8 tok/s). Short 2K context.' },
