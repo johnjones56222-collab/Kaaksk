@@ -23,7 +23,7 @@ const MODELS = {
   'uncensored-8b': { id: 'llama-3.1-8b-instruct-abliterated-bf16', node: 'uncensored-8b' },
   'gpt35style-8b': { id: 'llama-3.1-8b-instruct-gpt35style-bf16', node: 'gpt35style-8b' },
   'gpt35style-v2-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v2-bf16', node: 'gpt35style-v2-8b' },
-  'gpt35style-v3-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v3-f16', node: 'gpt35style-v3-8b' },
+  'gpt35style-v3-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v3-bf16', node: 'gpt35style-v3-8b' },
   'gpt4all-j': { id: 'gpt4all-j-v1.0', node: 'gpt4all-j' },
 };
 MODELS.uncensored = MODELS['uncensored-1b']; // the page's old key

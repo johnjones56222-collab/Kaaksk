@@ -234,7 +234,7 @@ const MODELS = {
     note: 'Your fine-tune: Llama 3.1 8B Instruct with a LoRA trained on 400 GPT-3.5 Turbo answers, so it writes in GPT-3.5 Turbo\'s style. Standard (not uncensored) base.' },
   'gpt35style-v2-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v2-bf16', weights: 'BF16 (16 GB) + your LoRA v2 (r16)', node: true, slots: 2,
     note: 'Version 2 of your fine-tune: the first LoRA trained further on 718 more GPT-3.5 Turbo answers (1,118 in all), for a closer GPT-3.5 Turbo style. Standard (not uncensored) base.' },
-  'gpt35style-v3-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v3-f16', weights: 'F16 (16 GB), your LoRA v3 (r16, all layers) merged in', node: true, slots: 2,
+  'gpt35style-v3-8b': { id: 'llama-3.1-8b-instruct-gpt35style-v3-bf16', weights: 'BF16 (16 GB), your LoRA v3 (r16, all layers) merged in', node: true, slots: 2,
     note: 'Version 3 of your fine-tune: a new LoRA on every layer (attention and MLP) trained with Unsloth on 2 GPUs over 4,394 GPT-3.5 Turbo answers. In its own test it is about twice as close to GPT-3.5 Turbo\'s style as plain Llama. Standard (not uncensored) base.' },
   'gpt4all-j': { id: 'gpt4all-j-v1.0', weights: 'BF16 as released (exact), FP32 compute', node: true, ctx: '2,048 tokens × 1 slot',
     batch: 'CTranslate2, one reply at a time',
