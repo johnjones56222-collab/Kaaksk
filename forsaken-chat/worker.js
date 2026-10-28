@@ -197,6 +197,10 @@ const PAGE = `<!doctype html>
   .empty { margin:auto; text-align:center; color:var(--muted); max-width:420px; }
   form { display:flex; gap:8px; padding:10px 0 16px; border-top:1px solid var(--line); }
   textarea { flex:1; resize:none; font:inherit; color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:9px 12px; min-height:44px; max-height:160px; }
+  .msg img { display:block; max-width:240px; max-height:240px; border-radius:8px; margin-bottom:6px; }
+  #preview { display:none; align-items:center; gap:8px; font-size:12px; color:var(--muted); padding-top:8px; }
+  #preview img { height:48px; border-radius:6px; }
+  #preview button { padding:2px 8px; }
 </style>
 </head>
 <body>
@@ -211,8 +215,11 @@ const PAGE = `<!doctype html>
   </header>
   <div class="status" id="status">Loading model status…</div>
   <div id="log"><div class="empty">Ask about FORSAKEN lore, characters, abilities and stats, or ask a character to roleplay.<br>Replies take about 20–40 seconds.</div></div>
+  <div id="preview"><img id="previewImg" alt="Attached image"><span>Image attached</span><button type="button" id="removeImg">Remove</button></div>
   <form id="form">
-    <textarea id="input" rows="1" placeholder="Message the model…" required></textarea>
+    <input type="file" id="file" accept="image/*" hidden>
+    <button type="button" id="attach" title="Attach an image" aria-label="Attach an image">📎</button>
+    <textarea id="input" rows="1" placeholder="Message the model…"></textarea>
     <button class="primary" id="send">Send</button>
   </form>
 </div>
@@ -231,12 +238,19 @@ function code() {
   return (c || "").trim();
 }
 
-function add(cls, text) {
+let attached = null; // data URL of the image waiting to be sent
+
+function add(cls, text, image) {
   const empty = $("log").querySelector(".empty");
   if (empty) empty.remove();
   const d = document.createElement("div");
   d.className = "msg " + cls;
-  d.textContent = text;
+  if (image) {
+    const img = document.createElement("img");
+    img.src = image;
+    d.appendChild(img);
+  }
+  d.appendChild(document.createTextNode(text));
   $("log").appendChild(d);
   $("log").scrollTop = $("log").scrollHeight;
   return d;
@@ -255,7 +269,43 @@ function newChat() {
   $("log").innerHTML = '<div class="empty">New chat with the ' + $("model").selectedOptions[0].text.toLowerCase() + '.</div>';
 }
 
-$("new").onclick = newChat;
+// Shrink attachments to at most 1024px JPEG so requests stay small.
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 1024 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      resolve(c.toDataURL("image/jpeg", 0.88));
+    };
+    img.onerror = () => reject(new Error("Could not read that image."));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function setAttachment(dataUrl) {
+  attached = dataUrl;
+  $("previewImg").src = dataUrl || "";
+  $("preview").style.display = dataUrl ? "flex" : "none";
+}
+
+$("attach").onclick = () => $("file").click();
+$("removeImg").onclick = () => setAttachment(null);
+$("file").onchange = async () => {
+  const f = $("file").files[0];
+  $("file").value = "";
+  if (!f) return;
+  try { setAttachment(await loadImage(f)); } catch (err) { alert(err.message); }
+};
+
+$("new").onclick = () => { newChat(); setAttachment(null); };
 $("model").onchange = () => { newChat(); refreshStatus(); };
 $("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); }
@@ -263,12 +313,16 @@ $("input").addEventListener("keydown", (e) => {
 
 $("form").onsubmit = async (e) => {
   e.preventDefault();
-  const text = $("input").value.trim();
+  const image = attached;
+  const text = $("input").value.trim() || (image ? "Who or what is shown in this image?" : "");
   if (!text || busy) return;
   busy = true; $("send").disabled = true;
   $("input").value = "";
-  add("user", text);
-  history.push({ role: "user", content: text });
+  setAttachment(null);
+  add("user", text, image);
+  history.push({ role: "user", content: image
+    ? [{ type: "image_url", image_url: { url: image } }, { type: "text", text }]
+    : text });
   const wait = add("bot wait", "Thinking…");
   const model = $("model").value;
   try {
