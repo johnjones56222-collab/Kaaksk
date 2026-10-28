@@ -73,8 +73,16 @@ https://usenaive-terminal.johnjones56222.workers.dev
   bf16` (the GGUF keeps its ChatML template) and runs with `CTX=32768` (the
   model's window) and `PARALLEL=8`. It needs its model card's system prompt
   to stay in character, so the hub adds it (`system` in `MODELS`) when a
-  request has no system message, and the page sends it in place of the
-  default "You are a helpful assistant.". About 6 tok/s on its host.
+  request has no system message, and picking it on the page puts it in the
+  System prompt box (kept separately from the usual prompt, which comes back
+  on switching away). With a modern prompt, or on modern topics it never
+  read about, it answers in modern English, as its model card warns. About
+  6 tok/s on its host.
+
+  The served GGUF was checked against the source: the safetensors match the
+  SHA-256s Hugging Face lists for Pclanglais/MonadGPT, and converting them
+  again gives a byte-identical GGUF
+  (`1b90ee3fcb87415046a275797ea02ad1d3a493dfb5dfdc3025717521ed9884e0`).
 
   Slots are as many full 128K contexts as fit in 64 GB next to the weights.
   The 8B streams at about 13-17 tok/s.

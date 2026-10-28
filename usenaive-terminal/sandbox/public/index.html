@@ -245,7 +245,7 @@ const MODELS = {
     note: 'Nomic AI\'s GPT4All-J v1.0 (April 2023): GPT-J 6B fine-tuned on GPT4All\'s assistant data. Not a Llama model; llama.cpp can\'t run GPT-J, so it runs on CTranslate2 (about 8 tok/s). Short 2K context.' },
   monadgpt: { id: 'monadgpt-7b-bf16', weights: 'BF16 as released (full precision, 14.5 GB)', node: true, ctx: '32,768 tokens × 8 slots',
     system: 'You are MonadGPT, a very old chatbot from the 17th century. Please answer the questions using an archaic language',
-    note: 'Pierre-Carl Langlais\'s MonadGPT: Mistral 7B (OpenHermes 2) fine-tuned on 11,000 early modern books in English, French and Latin, so it answers like a 17th-century writer, with the science of the time. Not a Llama model. While the system prompt is the default, its own (\'You are MonadGPT, a very old chatbot from the 17th century...\') is sent instead.' },
+    note: 'Pierre-Carl Langlais\'s MonadGPT: Mistral 7B (OpenHermes 2) fine-tuned on 11,000 early modern books in English, French and Latin, so it answers like a 17th-century writer, with the science of the time. Not a Llama model. It needs its own system prompt (\'You are MonadGPT, a very old chatbot from the 17th century...\'), which picking it puts in the System prompt box; with a modern prompt it answers in modern English.' },
 };
 let llmKey = store.get('llm-model', 'standard');
 if (llmKey === 'uncensored') llmKey = 'uncensored-1b';
@@ -262,7 +262,7 @@ function showModel() {
   $('llm-buttons').style.display = MODELS[llmKey].node ? 'none' : 'flex';
 }
 showModel();
-$('llm-model').onchange = () => { llmKey = $('llm-model').value; store.set('llm-model', llmKey); showModel(); pollLlama(); };
+$('llm-model').onchange = () => { llmKey = $('llm-model').value; store.set('llm-model', llmKey); showModel(); loadSys(); pollLlama(); };
 let llmStatus = 'stopped', pollTimer;
 async function pollLlama() {
   try {
@@ -288,11 +288,19 @@ $('llm-stop').onclick = async () => { await fetch('/api/llama/stop?model=' + llm
 
 // ---------- chat ----------
 let history = store.get('chat', []);
-['sys', 'temp', 'maxtok'].forEach((id) => {
+['temp', 'maxtok'].forEach((id) => {
   const saved = store.get('set-' + id, null);
   if (saved != null) $(id).value = saved;
   $(id).onchange = () => store.set('set-' + id, $(id).value);
 });
+// A model with its own system prompt (MonadGPT) keeps a separate one, starting
+// from its own, so picking it puts that prompt in the box and switching back
+// restores the usual one.
+const DEFAULT_SYS = $('sys').value;
+const sysKey = () => MODELS[llmKey].system ? 'set-sys-' + llmKey : 'set-sys';
+function loadSys() { $('sys').value = store.get(sysKey(), MODELS[llmKey].system || DEFAULT_SYS); }
+loadSys();
+$('sys').onchange = () => store.set(sysKey(), $('sys').value);
 function render() {
   const box = $('msgs');
   box.innerHTML = '';
@@ -331,9 +339,7 @@ $('composer').onsubmit = async (e) => {
   history.push(reply);
   render();
   const msgEl = $('msgs').lastChild;
-  // A model with its own system prompt (MonadGPT) uses it in place of the default one.
-  const sys = MODELS[llmKey].system && $('sys').value.trim() === 'You are a helpful assistant.' ? MODELS[llmKey].system : $('sys').value;
-  const messages = [{ role: 'system', content: sys }, ...history.slice(0, -1).filter((m) => !m.note).map(({ role, content }) => ({ role, content }))];
+  const messages = [{ role: 'system', content: $('sys').value }, ...history.slice(0, -1).filter((m) => !m.note).map(({ role, content }) => ({ role, content }))];
   const t0 = performance.now();
   let tokens = 0;
   try {
