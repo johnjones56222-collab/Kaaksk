@@ -147,28 +147,28 @@ async function poll(env, model, id, trainingId) {
 // 1-3 minutes. A cron run every minute sends each model a one-token request every few seconds (waiting
 // for each answer, which is what keeps it loaded) for just under a minute.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const PING_MS = 5000;
 
 async function keepWarm(env, model, deadline, budget) {
   const t = await target(env, model);
   const key = env[MODELS[model]];
   const body = JSON.stringify({ model: BASE_MODEL, messages: [{ role: "user", content: "hi" }], max_tokens: 1,
                                 temperature: 0, reasoning_effort: "none" });
-  let answered = 0;
-  while (Date.now() < deadline && budget.left > 2) {
-    budget.left--;
+  // One ping every PING_MS on a fixed beat, each checked once 3 s later (2 subrequests). A slow (reloading) model
+  // gets pinged just as often as a warm one, instead of waiting for its previous answer.
+  const ping = async () => {
     const r = await grpc("ChatCompleteFromCheckpoint",
       [...strField(1, t.path), ...strField(2, BASE_MODEL), ...strField(3, body)], key);
-    const id = dec.decode(r[1][0]);
-    await sleep(2500);
-    // Warm answers take ~3 s; a cold reload takes minutes, so back off then to save the budget.
-    for (let n = 0; Date.now() < deadline + 30000 && budget.left > 0; n++) {
-      budget.left--;
-      if ((await poll(env, model, id, "")).status !== "pending") { answered++; break; }
-      await sleep(n < 3 ? 2000 : 6000);
-    }
-    await sleep(5000);
+    await sleep(3000);
+    return (await poll(env, model, dec.decode(r[1][0]), "")).status !== "pending";
+  };
+  const pings = [];
+  while (Date.now() < deadline && budget.left >= 2) {
+    budget.left -= 2;
+    pings.push(ping().catch(() => false));
+    await sleep(PING_MS);
   }
-  return answered;
+  return (await Promise.all(pings)).filter(Boolean).length;
 }
 
 export default {
