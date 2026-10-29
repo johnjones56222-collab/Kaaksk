@@ -100,10 +100,10 @@ function withPronouns(messages) {
   return [{ role: "system", content: PRONOUNS }, ...messages];
 }
 
-async function startChat(env, model, messages, thinking) {
+async function startChat(env, model, messages, thinking, pronouns) {
   const t = await target(env, model);
   const key = env[MODELS[model]];
-  messages = withPronouns(messages);
+  if (pronouns) messages = withPronouns(messages);
   const body = { model: BASE_MODEL, messages, max_tokens: thinking ? 2000 : 900, temperature: 0.7,
                  reasoning_effort: thinking ? "high" : "none" };
   if (t.type === "training") {
@@ -166,9 +166,9 @@ export default {
       if (request.headers.get("x-access-code") !== env.ACCESS_CODE) return json({ error: "Wrong access code" }, 401);
 
       if (url.pathname === "/api/chat" && request.method === "POST") {
-        const { model, messages, thinking } = await request.json();
+        const { model, messages, thinking, pronouns } = await request.json();
         if (!MODELS[model]) return json({ error: "unknown model" }, 400);
-        const { id, trainingId, label } = await startChat(env, model, messages.slice(-30), !!thinking);
+        const { id, trainingId, label } = await startChat(env, model, messages.slice(-30), !!thinking, pronouns !== false);
         return json({ id, training_id: trainingId, label });
       }
 
