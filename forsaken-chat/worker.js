@@ -87,9 +87,23 @@ async function target(env, model) {
   return t;
 }
 
+// Official pronouns from the FORSAKEN wiki infoboxes; the fine-tunes don't use them reliably on their own.
+const PRONOUNS = "FORSAKEN character pronouns (official wiki; always use these): Noob: They/Them; Guest 1337: He/Him; " +
+  "Elliot: He/Him; Shedletsky: He/Him; Chance: He/They; 007n7: He/Him; Two Time: They/Them; Builderman: He/Him; " +
+  "Taph: Any/All; Dusekkar: He/Him; Veeronica: She/Her; Jane Doe: She/Her; Slasher: Any/All; c00lkidd: He/Him; " +
+  "John Doe: He/Him; Noli: Mirror Pronouns; 1x1x1x1: Any/All; Guest 666: Any/All; Nosferatu: He/Him; Azure: He/They.";
+
+function withPronouns(messages) {
+  if (messages[0]?.role === "system" && typeof messages[0].content === "string") {
+    return [{ ...messages[0], content: messages[0].content + "\n\n" + PRONOUNS }, ...messages.slice(1)];
+  }
+  return [{ role: "system", content: PRONOUNS }, ...messages];
+}
+
 async function startChat(env, model, messages, thinking) {
   const t = await target(env, model);
   const key = env[MODELS[model]];
+  messages = withPronouns(messages);
   const body = { model: BASE_MODEL, messages, max_tokens: thinking ? 2000 : 900, temperature: 0.7,
                  reasoning_effort: thinking ? "high" : "none" };
   if (t.type === "training") {
