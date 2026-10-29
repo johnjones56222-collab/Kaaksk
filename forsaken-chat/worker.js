@@ -7,8 +7,11 @@
 
 const RIVER = "https://api.river.ai/river.api.v1.RiverService/";
 const BASE_MODEL = "deepseek-ai/DeepSeek-V4.1-Flash-1017";
-const MODELS = { main: "RIVER_KEY_MAIN", second: "RIVER_KEY_SECOND", dumb: "RIVER_KEY_MAIN" };
-const FORSAKEN = new Set(["main", "second"]);
+const MODELS = { main: "RIVER_KEY_MAIN", second: "RIVER_KEY_SECOND", main_gen: "RIVER_KEY_MAIN",
+                 second_gen: "RIVER_KEY_SECOND", dumb: "RIVER_KEY_MAIN" };
+const FORSAKEN = new Set(["main", "second", "main_gen", "second_gen"]);
+// Each cron run may make at most 50 subrequests on the free plan, so the models are split across two schedules.
+const WARM = { "* * * * *": ["main", "second", "dumb"], "*/1 * * * *": ["main_gen", "second_gen"] };
 
 // ---- minimal protobuf -------------------------------------------------------------------------
 const enc = new TextEncoder();
@@ -167,9 +170,10 @@ async function keepWarm(env, model, deadline, budget) {
 
 export default {
   async scheduled(event, env, ctx) {
-    // Free-plan Workers allow 50 subrequests per invocation; stay under that across all models.
+    // Free-plan Workers allow 50 subrequests per invocation; stay under that across this run's models.
+    const models = WARM[event.cron] || Object.keys(MODELS);
     const deadline = Date.now() + 52000;
-    ctx.waitUntil(Promise.allSettled(Object.keys(MODELS).map((m) => keepWarm(env, m, deadline, { left: Math.floor(44 / Object.keys(MODELS).length) }))));
+    ctx.waitUntil(Promise.allSettled(models.map((m) => keepWarm(env, m, deadline, { left: Math.floor(44 / models.length) }))));
   },
 
   async fetch(request, env) {
@@ -263,6 +267,8 @@ const PAGE = `<!doctype html>
     <select id="model" aria-label="Model">
       <option value="main">Main account model</option>
       <option value="second">Second account model</option>
+      <option value="main_gen">Main account model + Gen Guest</option>
+      <option value="second_gen">Second account model + Gen Guest</option>
       <option value="dumb">Dumb customer service bot</option>
     </select>
     <button id="new">New chat</button>
