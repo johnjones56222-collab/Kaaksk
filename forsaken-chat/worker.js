@@ -75,8 +75,11 @@ async function grpc(method, fields, apiKey) {
 }
 
 // ---- HTTP handlers -----------------------------------------------------------------------------
+// The API is also called from a local HTML app (Origin: null); the access code, not the origin, guards spending.
+const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, OPTIONS",
+               "access-control-allow-headers": "content-type, x-access-code", "access-control-max-age": "600" };
 const json = (obj, status = 200) =>
-  new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
+  new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json", ...CORS } });
 
 async function target(env, model) {
   const t = await env.CKPTS.get(model, "json");
@@ -84,10 +87,11 @@ async function target(env, model) {
   return t;
 }
 
-async function startChat(env, model, messages) {
+async function startChat(env, model, messages, thinking) {
   const t = await target(env, model);
   const key = env[MODELS[model]];
-  const body = { model: BASE_MODEL, messages, max_tokens: 700, temperature: 0.7, reasoning_effort: "none" };
+  const body = { model: BASE_MODEL, messages, max_tokens: thinking ? 2000 : 900, temperature: 0.7,
+                 reasoning_effort: thinking ? "high" : "none" };
   if (t.type === "training") {
     try {
       const r = await grpc("ChatCompleteFromTraining", [...strField(1, t.id), ...strField(2, JSON.stringify(body))], key);
@@ -114,7 +118,8 @@ async function poll(env, model, id, trainingId) {
     const cc = parse(r[12][0]);
     const out = JSON.parse(dec.decode(cc[1][0]));
     if (out.error) return { status: "error", error: out.error.message || JSON.stringify(out.error) };
-    return { status: "done", content: out.choices?.[0]?.message?.content ?? "" };
+    const msg = out.choices?.[0]?.message || {};
+    return { status: "done", content: msg.content ?? "", reasoning: msg.reasoning_content || msg.reasoning || "" };
   }
   return { status: "error", error: "Unexpected response from River" };
 }
@@ -124,6 +129,7 @@ export default {
     const url = new URL(request.url);
     try {
       if (url.pathname === "/") return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } });
+      if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
       if (url.pathname === "/api/update" && request.method === "POST") {
         if (request.headers.get("x-update-secret") !== env.UPDATE_SECRET) return json({ error: "forbidden" }, 403);
@@ -146,9 +152,9 @@ export default {
       if (request.headers.get("x-access-code") !== env.ACCESS_CODE) return json({ error: "Wrong access code" }, 401);
 
       if (url.pathname === "/api/chat" && request.method === "POST") {
-        const { model, messages } = await request.json();
+        const { model, messages, thinking } = await request.json();
         if (!MODELS[model]) return json({ error: "unknown model" }, 400);
-        const { id, trainingId, label } = await startChat(env, model, messages.slice(-30));
+        const { id, trainingId, label } = await startChat(env, model, messages.slice(-30), !!thinking);
         return json({ id, training_id: trainingId, label });
       }
 
