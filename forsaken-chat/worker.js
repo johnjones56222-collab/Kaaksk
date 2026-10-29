@@ -138,7 +138,23 @@ async function poll(env, model, id, trainingId) {
   return { status: "error", error: "Unexpected response from River" };
 }
 
+// River unloads an idle fine-tune after a few minutes, and reloading it makes the next reply take
+// 1-3 minutes. A one-token request on a timer keeps both models loaded.
+async function keepWarm(env) {
+  const body = JSON.stringify({ model: BASE_MODEL, messages: [{ role: "user", content: "hi" }], max_tokens: 1,
+                                reasoning_effort: "none" });
+  await Promise.allSettled(Object.keys(MODELS).map(async (model) => {
+    const t = await target(env, model);
+    await grpc("ChatCompleteFromCheckpoint", [...strField(1, t.path), ...strField(2, BASE_MODEL), ...strField(3, body)],
+               env[MODELS[model]]);
+  }));
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(keepWarm(env));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     try {
