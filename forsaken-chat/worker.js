@@ -10,8 +10,9 @@ const BASE_MODEL = "deepseek-ai/DeepSeek-V4.1-Flash-1017";
 const MODELS = { main: "RIVER_KEY_MAIN", second: "RIVER_KEY_SECOND", main_gen: "RIVER_KEY_MAIN",
                  second_gen: "RIVER_KEY_SECOND", dumb: "RIVER_KEY_MAIN" };
 const FORSAKEN = new Set(["main", "second", "main_gen", "second_gen"]);
-// Each cron run may make at most 50 subrequests on the free plan, so the models are split across two schedules.
-const WARM = { "* * * * *": ["main", "second", "dumb"], "*/1 * * * *": ["main_gen", "second_gen"] };
+// River keeps only one fine-tune per account loaded for chat, so pinging two on the same account makes them evict
+// each other. Keep one per account warm: the dumb bot (main account) and second + Gen Guest (second account).
+const WARM = ["dumb", "second_gen"];
 
 // ---- minimal protobuf -------------------------------------------------------------------------
 const enc = new TextEncoder();
@@ -152,6 +153,7 @@ async function keepWarm(env, model, deadline, budget) {
   const key = env[MODELS[model]];
   const body = JSON.stringify({ model: BASE_MODEL, messages: [{ role: "user", content: "hi" }], max_tokens: 1,
                                 temperature: 0, reasoning_effort: "none" });
+  let answered = 0;
   while (Date.now() < deadline && budget.left > 2) {
     budget.left--;
     const r = await grpc("ChatCompleteFromCheckpoint",
@@ -161,19 +163,22 @@ async function keepWarm(env, model, deadline, budget) {
     // Warm answers take ~3 s; a cold reload takes minutes, so back off then to save the budget.
     for (let n = 0; Date.now() < deadline + 30000 && budget.left > 0; n++) {
       budget.left--;
-      if ((await poll(env, model, id, "")).status !== "pending") break;
+      if ((await poll(env, model, id, "")).status !== "pending") { answered++; break; }
       await sleep(n < 3 ? 2000 : 6000);
     }
     await sleep(5000);
   }
+  return answered;
 }
 
 export default {
   async scheduled(event, env, ctx) {
     // Free-plan Workers allow 50 subrequests per invocation; stay under that across this run's models.
-    const models = WARM[event.cron] || Object.keys(MODELS);
+    const models = WARM;
     const deadline = Date.now() + 52000;
-    ctx.waitUntil(Promise.allSettled(models.map((m) => keepWarm(env, m, deadline, { left: Math.floor(44 / models.length) }))));
+    ctx.waitUntil(Promise.allSettled(models.map((m) => keepWarm(env, m, deadline, { left: Math.floor(44 / models.length) })))
+      .then((rs) => console.log(JSON.stringify({ cron: event.cron, pings: Object.fromEntries(
+        models.map((m, i) => [m, rs[i].status === "fulfilled" ? rs[i].value : String(rs[i].reason?.message || rs[i].reason)])) }))));
   },
 
   async fetch(request, env) {
