@@ -7,7 +7,8 @@
 
 const RIVER = "https://api.river.ai/river.api.v1.RiverService/";
 const BASE_MODEL = "deepseek-ai/DeepSeek-V4.1-Flash-1017";
-const MODELS = { main: "RIVER_KEY_MAIN", second: "RIVER_KEY_SECOND" };
+const MODELS = { main: "RIVER_KEY_MAIN", second: "RIVER_KEY_SECOND", dumb: "RIVER_KEY_MAIN" };
+const FORSAKEN = new Set(["main", "second"]);
 
 // ---- minimal protobuf -------------------------------------------------------------------------
 const enc = new TextEncoder();
@@ -103,7 +104,7 @@ function withPronouns(messages) {
 async function startChat(env, model, messages, thinking, pronouns) {
   const t = await target(env, model);
   const key = env[MODELS[model]];
-  if (pronouns) messages = withPronouns(messages);
+  if (pronouns && FORSAKEN.has(model)) messages = withPronouns(messages);
   const body = { model: BASE_MODEL, messages, max_tokens: thinking ? 2000 : 900, temperature: 0.7,
                  reasoning_effort: thinking ? "high" : "none" };
   if (t.type === "training") {
@@ -166,9 +167,9 @@ async function keepWarm(env, model, deadline, budget) {
 
 export default {
   async scheduled(event, env, ctx) {
-    // Free-plan Workers allow 50 subrequests per invocation; stay under that across both models.
+    // Free-plan Workers allow 50 subrequests per invocation; stay under that across all models.
     const deadline = Date.now() + 52000;
-    ctx.waitUntil(Promise.allSettled(Object.keys(MODELS).map((m) => keepWarm(env, m, deadline, { left: 22 }))));
+    ctx.waitUntil(Promise.allSettled(Object.keys(MODELS).map((m) => keepWarm(env, m, deadline, { left: Math.floor(44 / Object.keys(MODELS).length) }))));
   },
 
   async fetch(request, env) {
@@ -262,6 +263,7 @@ const PAGE = `<!doctype html>
     <select id="model" aria-label="Model">
       <option value="main">Main account model</option>
       <option value="second">Second account model</option>
+      <option value="dumb">Dumb customer service bot</option>
     </select>
     <button id="new">New chat</button>
   </header>
