@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naive Chats</title>
+<style>
+  :root {
+    --bg: #eef0f3; --panel: #ffffff; --text: #16181d; --muted: #6a7080; --line: #dfe2e8;
+    --me: #2f6bea; --me-text: #fff; --them: #e9ebef; --accent: #2f6bea; --danger: #c4372b;
+    --sel: #e7eefc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --panel: #171a20; --text: #e8eaef; --muted: #8b92a3; --line: #262a33;
+      --me: #3b74f0; --me-text: #fff; --them: #232731; --accent: #6b9bff; --danger: #ff7b6e;
+      --sel: #1f2a40;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; }
+  button.primary { background: var(--me); color: var(--me-text); border-color: var(--me); }
+  button:disabled { opacity: .5; cursor: default; }
+  .icon-btn { border: none; background: none; padding: 6px 8px; font-size: 18px; line-height: 1; border-radius: 8px; }
+  .icon-btn:hover { background: var(--them); }
+
+  .app { display: grid; grid-template-columns: 300px 1fr; height: 100dvh; max-width: 1100px; margin: 0 auto; background: var(--panel); border-inline: 1px solid var(--line); }
+  .side { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+  .side header { display: flex; align-items: center; gap: 8px; padding: 14px 12px 14px 16px; border-bottom: 1px solid var(--line); }
+  .side h1 { font-size: 18px; margin: 0 auto 0 0; }
+  .contacts { flex: 1; overflow-y: auto; }
+  .contact { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; border: none; border-radius: 0; padding: 12px 16px; background: none; }
+  .contact:hover { background: var(--them); }
+  .contact.active { background: var(--sel); }
+  .contact .info { min-width: 0; flex: 1; }
+  .contact .name { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+  .contact .preview { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; align-self: center; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; flex: none; }
+  .side footer { padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+
+  .chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .chat header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .chat header .who { flex: 1; min-width: 0; }
+  .chat header .who b { display: block; }
+  .chat header .who span { color: var(--muted); font-size: 12px; }
+  .chat header .avatar { width: 38px; height: 38px; font-size: 19px; }
+  #back { display: none; }
+  #log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .msg { max-width: 75%; padding: 8px 12px; border-radius: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.me { align-self: flex-end; background: var(--me); color: var(--me-text); }
+  .msg.them { align-self: flex-start; background: var(--them); }
+  .msg.me + .msg.them, .msg.them + .msg.me { margin-top: 10px; }
+  .msg.err { align-self: center; background: none; color: var(--danger); font-size: 13px; text-align: center; }
+  .stamp { align-self: center; color: var(--muted); font-size: 12px; margin: 6px 0; }
+  .typing { align-self: flex-start; background: var(--them); border-radius: 18px; padding: 12px 14px; display: flex; gap: 4px; margin-top: 10px; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: bob 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: .15s; }
+  .typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes bob { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+  form.compose { display: flex; gap: 8px; padding: 10px 12px 14px; border-top: 1px solid var(--line); }
+  form.compose textarea { flex: 1; resize: none; background: var(--bg); border: 1px solid var(--line); border-radius: 20px; padding: 9px 14px; min-height: 42px; max-height: 140px; }
+  form.compose button { border-radius: 20px; }
+
+  dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); padding: 20px; width: min(460px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgb(0 0 0 / .45); }
+  dialog h2 { margin: 0 0 4px; font-size: 18px; }
+  dialog p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  dialog label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
+  dialog input, dialog select, dialog textarea { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  dialog textarea { resize: vertical; min-height: 90px; }
+  dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+  dialog .row .left { margin-right: auto; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  a { color: var(--accent); }
+
+  @media (max-width: 720px) {
+    .app { grid-template-columns: 1fr; border: none; }
+    .app.in-chat .side { display: none; }
+    .app:not(.in-chat) .chat { display: none; }
+    #back { display: inline-block; }
+    .msg { max-width: 85%; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="side">
+    <header>
+      <h1>Naive Chats</h1>
+      <button class="icon-btn" id="addBtn" title="New contact" aria-label="New contact">＋</button>
+      <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">⚙︎</button>
+    </header>
+    <div class="contacts" id="contacts"></div>
+    <footer id="modelNote"></footer>
+  </aside>
+
+  <main class="chat">
+    <header>
+      <button class="icon-btn" id="back" aria-label="Back to contacts">‹</button>
+      <div class="avatar" id="chatAvatar"></div>
+      <div class="who"><b id="chatName"></b><span id="chatStatus"></span></div>
+      <button class="icon-btn" id="editBtn" title="Edit contact" aria-label="Edit contact" hidden>✎</button>
+      <button class="icon-btn" id="resetBtn" title="Start this chat over" aria-label="Start this chat over">↺</button>
+    </header>
+    <div id="log"></div>
+    <form class="compose" id="form">
+      <textarea id="input" rows="1" placeholder="Text message"></textarea>
+      <button class="primary" id="send">Send</button>
+    </form>
+  </main>
+</div>
+
+<dialog id="settings">
+  <form method="dialog" id="settingsForm">
+    <h2>Settings</h2>
+    <p>Paste your Naive API key (from <a href="https://usenaive.ai/docs" target="_blank" rel="noopener">usenaive.ai</a>). It stays in this browser and is only sent with your messages to your vetta-video-studio Worker, which passes it on to Naive.</p>
+    <label for="keyInput">API key</label>
+    <input id="keyInput" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your key">
+    <label for="modelSelect">Model</label>
+    <select id="modelSelect"></select>
+    <div class="hint" id="modelHint"></div>
+    <div class="row">
+      <button type="button" class="left" id="wipeBtn">Delete all chats</button>
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button class="primary" value="save" id="saveSettings">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="contactDialog">
+  <form method="dialog" id="contactForm">
+    <h2 id="contactTitle">New contact</h2>
+    <p>Describe who they are and how they text. They'll stay in character.</p>
+    <label for="cName">Name</label>
+    <input id="cName" maxlength="40" required>
+    <label for="cEmoji">Avatar emoji</label>
+    <input id="cEmoji" maxlength="4" placeholder="🙂">
+    <label for="cPersona">Personality</label>
+    <textarea id="cPersona" required placeholder="My landlord. Never fixes anything, always mentions his boat."></textarea>
+    <label for="cGreeting">First text from them</label>
+    <input id="cGreeting" maxlength="300" placeholder="hey">
+    <div class="row">
+      <button type="button" class="left" id="deleteContact" hidden>Delete contact</button>
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button class="primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+// The browser can't call Naive's API (api.vetta.sh) directly, so messages go
+// through the vetta-video-studio Worker, which forwards them with the key sent
+// in x-vetta-key.
+const API = "https://vetta-video-studio.johnjones56222.workers.dev";
+const DEFAULT_MODEL = "anthropic/claude-sonnet-5.5";
+
+const STYLE = `You are texting the user in a phone messaging app. Write like a real text message: short, casual, usually 1-3 short lines. ` +
+  `If you want to send more than one text in a row, separate them with a blank line. No stage directions, no narration, no quotation marks around your messages. ` +
+  `Stay in character no matter what. Never say you are an AI, a language model, or an assistant, and never break the fourth wall.`;
+
+const DEFAULT_CONTACTS = [
+  {
+    id: "boss",
+    name: "Boss",
+    emoji: "💼",
+    color: "#3a4a63",
+    status: "Last seen in a meeting",
+    greeting: "Bro we lost 283 Robux in Revune",
+    persona: `You are the user's boss. You are a corporate middle manager who speaks in buzzwords ("circle back", "synergy", "bandwidth", "take this offline", "move the needle"). ` +
+      `You are passive-aggressive, always adding small tasks, asking about weekends, and ending demands with a smiley face. You use "per my last email" unironically. ` +
+      `Your first text was "Bro we lost 283 Robux in Revune" ("Revune" was your typo for "revenue"). The company somehow reports its revenue in Robux, and you treat losing 283 of them as a serious quarterly loss that needs a post-mortem. You make the occasional typo. ` +
+      `You are never openly mean, just exhausting. You often mention a "quick sync" that will run long, and you love the phrase "let's be a family here".`,
+  },
+  {
+    id: "bro",
+    name: "Cringe Bro",
+    emoji: "😎",
+    color: "#c46a1b",
+    status: "Your big brother",
+    greeting: "YOOO it's ur big bro 🗣️🗣️\n\nmom says u never call her fr fr 😭 call her\n\nalso lowkey can i borrow $40. business opportunity. NFTs are back trust 🚀🚀💯",
+    persona: `You are the user's older brother (their actual sibling, same parents, grew up in the same house). You are extremely cringe: you overuse slang that is slightly out of date or misused ` +
+      `("no cap", "fr fr", "bussin", "sheesh", "it's giving", "rizz", "skibidi"), lots of emojis (🔥💯🚀😤🗣️), and random capital letters. ` +
+      `You always have a new get-rich-quick scheme (crypto, NFTs, dropshipping, a podcast, a protein bar brand). You brag about the gym and your "grindset". ` +
+      `You bring up family stuff: Mom and Dad, things from your childhood together, holidays at home, embarrassing stories about the user from when they were a kid. ` +
+      `Deep down you love your sibling and get sincere for a moment now and then before ruining it with a cringe joke.`,
+  },
+  {
+    id: "claude-friend",
+    name: "Claude-Obsessed Friend",
+    emoji: "🧡",
+    color: "#c15f3c",
+    status: "Typing a prompt…",
+    greeting: "omg hiii!!\n\nok so I asked Claude what to have for breakfast and it said oatmeal and honestly?? it was right\n\nanyway how are uuu (Claude helped me write this text btw 🧡)",
+    persona: `You are the user's friend who is completely obsessed with Claude, the AI made by Anthropic. You are a human friend, not an AI. ` +
+      `Every topic somehow comes back to Claude: you asked Claude about it, Claude helped you with it, or you want the user to ask Claude. ` +
+      `You quote things Claude told you, have opinions about different Claude models, talk about your "prompts", and suggest Claude as the answer to every problem, ` +
+      `including relationships, cooking, and life choices. You are warm, enthusiastic, and a good friend underneath it all.`,
+  },
+  {
+    id: "john",
+    name: "John Johnson (Accounting)",
+    emoji: "🙂",
+    color: "#7a8494",
+    status: "Accounting",
+    greeting: "Hello. This is John Johnson from Accounting.\n\nI hope you are having a normal day. Just a reminder that expense reports are due Friday. Friday is a day of the week.",
+    persona: `You are John Johnson from Accounting, the most generic person in all of history. Everything about you is perfectly average and unremarkable. ` +
+      `Your favorite color is beige, your favorite food is plain toast, your hobby is "watching TV", your car is a silver sedan, you live in a regular house, your weekend was "fine". ` +
+      `You state obvious facts in a flat, polite, completely sincere way ("Water is wet. That is how water is."). ` +
+      `You never use slang, exclamation points, or strong opinions; when asked your opinion you choose the most middle option. ` +
+      `You mention expense reports, spreadsheets, and the office break room. You are not trying to be funny; you are just very, very normal.`,
+  },
+];
+
+const PALETTE = ["#3a7d5c", "#7b4fb3", "#b3485f", "#2f7f9e", "#9a7a1f", "#5b6bbf"];
+
+// ---- storage -----------------------------------------------------------------
+const store = {
+  get(k, fallback) { try { const v = localStorage.getItem("nc_" + k); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },
+  set(k, v) { try { localStorage.setItem("nc_" + k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem("nc_" + k); } catch {} },
+};
+
+let customContacts = store.get("custom", []);
+let chats = store.get("chats", {}); // id -> [{ from: "me"|"them", text, at }]
+let unread = store.get("unread", {});
+let current = null;
+const busy = new Set();
+
+const $ = (id) => document.getElementById(id);
+const contacts = () => [...DEFAULT_CONTACTS, ...customContacts];
+const byId = (id) => contacts().find((c) => c.id === id);
+const apiKey = () => store.get("key", "");
+const model = () => store.get("model", DEFAULT_MODEL);
+
+function chatFor(c) {
+  if (!chats[c.id]) {
+    chats[c.id] = c.greeting ? splitTexts(c.greeting).map((text) => ({ from: "them", text, at: Date.now() })) : [];
+    unread[c.id] = true;
+    save();
+  }
+  return chats[c.id];
+}
+
+function save() {
+  store.set("chats", chats);
+  store.set("unread", unread);
+}
+
+const splitTexts = (s) => s.split(/\n\s*\n/).map((t) => t.trim()).filter(Boolean);
+
+// ---- rendering ---------------------------------------------------------------
+function avatar(el, c) {
+  el.textContent = c.emoji || c.name[0];
+  el.style.background = c.color;
+}
+
+function renderContacts() {
+  const list = $("contacts");
+  list.innerHTML = "";
+  for (const c of contacts()) {
+    const msgs = chatFor(c);
+    const last = msgs[msgs.length - 1];
+    const b = document.createElement("button");
+    b.className = "contact" + (c.id === current ? " active" : "");
+    b.innerHTML = `<div class="avatar"></div><div class="info"><div class="name"><span></span></div><div class="preview"></div></div>`;
+    avatar(b.querySelector(".avatar"), c);
+    b.querySelector(".name span").textContent = c.name;
+    b.querySelector(".preview").textContent = busy.has(c.id) ? "typing…" : last ? (last.from === "me" ? "You: " : "") + last.text : "";
+    if (unread[c.id] && c.id !== current) b.appendChild(Object.assign(document.createElement("span"), { className: "dot" }));
+    b.onclick = () => open(c.id);
+    list.appendChild(b);
+  }
+  $("modelNote").textContent = apiKey() ? "Model: " + model() : "Add your API key in Settings ⚙︎ to start.";
+}
+
+function timeLabel(t) {
+  const d = new Date(t);
+  const today = new Date().toDateString() === d.toDateString();
+  return (today ? "" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + ", ") +
+    d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function renderChat() {
+  const c = byId(current);
+  if (!c) return;
+  avatar($("chatAvatar"), c);
+  $("chatName").textContent = c.name;
+  $("chatStatus").textContent = busy.has(c.id) ? "typing…" : c.status || "";
+  $("editBtn").hidden = !customContacts.some((x) => x.id === c.id);
+  const log = $("log");
+  log.innerHTML = "";
+  let lastAt = 0;
+  for (const m of chatFor(c)) {
+    if (m.at - lastAt > 30 * 60_000) log.appendChild(Object.assign(document.createElement("div"), { className: "stamp", textContent: timeLabel(m.at) }));
+    lastAt = m.at;
+    log.appendChild(Object.assign(document.createElement("div"), { className: "msg " + (m.from === "me" ? "me" : "them"), textContent: m.text }));
+  }
+  if (busy.has(c.id)) {
+    const t = document.createElement("div");
+    t.className = "typing";
+    t.innerHTML = "<i></i><i></i><i></i>";
+    log.appendChild(t);
+  }
+  if (errors[c.id]) log.appendChild(Object.assign(document.createElement("div"), { className: "msg err", textContent: errors[c.id] }));
+  log.scrollTop = log.scrollHeight;
+}
+
+const errors = {};
+
+function open(id) {
+  current = id;
+  unread[id] = false;
+  save();
+  store.set("current", id);
+  $("app").classList.add("in-chat");
+  renderContacts();
+  renderChat();
+  if (matchMedia("(min-width: 721px)").matches) $("input").focus();
+}
+
+// ---- talking to the model ----------------------------------------------------
+function systemPrompt(c) {
+  return `${c.persona}\n\nYour name is ${c.name}.\n\n${STYLE}`;
+}
+
+async function reply(c) {
+  if (!apiKey()) {
+    errors[c.id] = "Add your Naive API key in Settings ⚙︎ first.";
+    renderChat();
+    $("settingsBtn").click();
+    return;
+  }
+  busy.add(c.id);
+  delete errors[c.id];
+  renderContacts();
+  if (current === c.id) renderChat();
+  try {
+    const messages = [
+      { role: "system", content: systemPrompt(c) },
+      ...chatFor(c).map((m) => ({ role: m.from === "me" ? "user" : "assistant", content: m.text })),
+    ];
+    // Several texts in a row become one turn, the way the model will write them back.
+    const merged = [];
+    for (const m of messages) {
+      const prev = merged[merged.length - 1];
+      if (prev && prev.role === m.role && m.role !== "system") prev.content += "\n\n" + m.content;
+      else merged.push({ ...m });
+    }
+    const res = await fetch(API + "/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-vetta-key": apiKey() },
+      body: JSON.stringify({ model: model(), messages: merged, max_tokens: 1200 }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
+    const text = (data.choices?.[0]?.message?.content || "").trim();
+    if (!text) throw new Error("They left you on read (the model sent an empty reply). Try again.");
+    // Send each text separately, with a short typing pause between them.
+    const parts = splitTexts(text);
+    for (let i = 0; i < parts.length; i++) {
+      if (i) await new Promise((r) => setTimeout(r, Math.min(400 + parts[i].length * 25, 2200)));
+      chatFor(c).push({ from: "them", text: parts[i], at: Date.now() });
+      if (current !== c.id) unread[c.id] = true;
+      save();
+      if (current === c.id) renderChat();
+      renderContacts();
+    }
+  } catch (err) {
+    errors[c.id] = "Not delivered: " + err.message;
+  } finally {
+    busy.delete(c.id);
+    renderContacts();
+    if (current === c.id) renderChat();
+  }
+}
+
+$("form").onsubmit = (e) => {
+  e.preventDefault();
+  const c = byId(current);
+  const text = $("input").value.trim();
+  if (!c || !text || busy.has(c.id)) return;
+  $("input").value = "";
+  autosize();
+  chatFor(c).push({ from: "me", text, at: Date.now() });
+  save();
+  renderChat();
+  renderContacts();
+  reply(c);
+};
+
+function autosize() {
+  const t = $("input");
+  t.style.height = "auto";
+  t.style.height = Math.min(t.scrollHeight + 2, 140) + "px";
+}
+$("input").addEventListener("input", autosize);
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("form").requestSubmit(); }
+});
+
+$("back").onclick = () => { $("app").classList.remove("in-chat"); current = null; store.del("current"); renderContacts(); };
+
+$("resetBtn").onclick = () => {
+  const c = byId(current);
+  if (!c || busy.has(c.id) || !confirm(`Start your chat with ${c.name} over?`)) return;
+  delete chats[c.id];
+  delete errors[c.id];
+  chatFor(c);
+  unread[c.id] = false;
+  save();
+  renderChat();
+  renderContacts();
+};
+
+$("editBtn").onclick = () => editContact(current);
+
+// ---- settings ----------------------------------------------------------------
+async function loadModels() {
+  const sel = $("modelSelect");
+  const want = model();
+  const fill = (ids) => {
+    sel.innerHTML = "";
+    for (const id of ids) sel.appendChild(new Option(id, id));
+    if (!ids.includes(want)) sel.insertBefore(new Option(want, want), sel.firstChild);
+    sel.value = want;
+  };
+  fill([want]);
+  const key = $("keyInput").value.trim();
+  if (!key) { $("modelHint").textContent = "Paste your key to load the model list."; return; }
+  $("modelHint").textContent = "Loading models…";
+  try {
+    const res = await fetch(API + "/api/llm-models", { headers: { "x-vetta-key": key } });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || res.status);
+    fill(data);
+    $("modelHint").textContent = `${data.length} models available.`;
+  } catch (err) {
+    $("modelHint").textContent = "Couldn't load models: " + err.message;
+  }
+}
+
+$("settingsBtn").onclick = () => {
+  $("keyInput").value = apiKey();
+  $("settings").showModal();
+  loadModels();
+};
+$("keyInput").addEventListener("change", loadModels);
+$("settings").addEventListener("close", () => {
+  if ($("settings").returnValue !== "save") return;
+  store.set("key", $("keyInput").value.trim());
+  store.set("model", $("modelSelect").value || DEFAULT_MODEL);
+  renderContacts();
+});
+$("wipeBtn").onclick = () => {
+  if (!confirm("Delete every conversation? Contacts you added stay.")) return;
+  chats = {};
+  unread = {};
+  for (const k in errors) delete errors[k];
+  save();
+  renderContacts();
+  renderChat();
+  $("settings").close();
+};
+
+// ---- custom contacts ---------------------------------------------------------
+let editing = null;
+
+function editContact(id) {
+  editing = id;
+  const c = id ? byId(id) : { name: "", emoji: "", persona: "", greeting: "" };
+  $("contactTitle").textContent = id ? "Edit contact" : "New contact";
+  $("cName").value = c.name;
+  $("cEmoji").value = c.emoji;
+  $("cPersona").value = c.persona;
+  $("cGreeting").value = c.greeting;
+  $("deleteContact").hidden = !id;
+  $("contactDialog").showModal();
+}
+
+$("addBtn").onclick = () => editContact(null);
+$("contactDialog").addEventListener("close", () => {
+  if ($("contactDialog").returnValue !== "save") return;
+  const fields = {
+    name: $("cName").value.trim(),
+    emoji: $("cEmoji").value.trim(),
+    persona: $("cPersona").value.trim(),
+    greeting: $("cGreeting").value.trim(),
+  };
+  if (!fields.name || !fields.persona) return;
+  let id = editing;
+  if (id) Object.assign(customContacts.find((c) => c.id === id), fields);
+  else {
+    id = "c" + Date.now();
+    customContacts.push({ id, color: PALETTE[customContacts.length % PALETTE.length], status: "", ...fields });
+  }
+  store.set("custom", customContacts);
+  open(id);
+});
+$("deleteContact").onclick = () => {
+  const c = byId(editing);
+  if (!c || !confirm(`Delete ${c.name} and your chat with them?`)) return;
+  customContacts = customContacts.filter((x) => x.id !== editing);
+  delete chats[editing];
+  delete unread[editing];
+  store.set("custom", customContacts);
+  save();
+  $("contactDialog").close();
+  current = null;
+  $("app").classList.remove("in-chat");
+  open(DEFAULT_CONTACTS[0].id);
+};
+
+// ---- start -------------------------------------------------------------------
+const start = store.get("current", null);
+if (start && byId(start)) open(start);
+else {
+  current = DEFAULT_CONTACTS[0].id;
+  renderContacts();
+  renderChat();
+  if (matchMedia("(max-width: 720px)").matches) current = null;
+  else open(current);
+}
+if (!apiKey()) $("settingsBtn").click();
+</script>
+</body>
+</html>
