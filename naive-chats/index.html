@@ -29,24 +29,25 @@
 
   .app { display: grid; grid-template-columns: 300px 1fr; height: 100dvh; max-width: 1100px; margin: 0 auto; background: var(--panel); border-inline: 1px solid var(--line); }
   .side { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
-  .side header { display: flex; align-items: center; gap: 8px; padding: 14px 12px 14px 16px; border-bottom: 1px solid var(--line); }
+  .side header { display: flex; align-items: center; gap: 4px; padding: 14px 12px 14px 16px; border-bottom: 1px solid var(--line); }
   .side h1 { font-size: 18px; margin: 0 auto 0 0; }
   .contacts { flex: 1; overflow-y: auto; }
+  .section { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 12px 16px 4px; }
   .contact { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; border: none; border-radius: 0; padding: 12px 16px; background: none; }
   .contact:hover { background: var(--them); }
   .contact.active { background: var(--sel); }
   .contact .info { min-width: 0; flex: 1; }
-  .contact .name { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+  .contact .name { font-weight: 600; }
   .contact .preview { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; align-self: center; }
-  .avatar { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; flex: none; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; flex: none; color: #fff; }
   .side footer { padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 
   .chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .chat header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
   .chat header .who { flex: 1; min-width: 0; }
   .chat header .who b { display: block; }
-  .chat header .who span { color: var(--muted); font-size: 12px; }
+  .chat header .who span { color: var(--muted); font-size: 12px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chat header .avatar { width: 38px; height: 38px; font-size: 19px; }
   #back { display: none; }
   #log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
@@ -54,26 +55,39 @@
   .msg.me { align-self: flex-end; background: var(--me); color: var(--me-text); }
   .msg.them { align-self: flex-start; background: var(--them); }
   .msg.me + .msg.them, .msg.them + .msg.me { margin-top: 10px; }
+  .sender { align-self: flex-start; font-size: 12px; font-weight: 600; margin: 10px 0 0 12px; }
   .msg.err { align-self: center; background: none; color: var(--danger); font-size: 13px; text-align: center; }
-  .stamp { align-self: center; color: var(--muted); font-size: 12px; margin: 6px 0; }
+  .stamp { align-self: center; color: var(--muted); font-size: 12px; margin: 6px 0; text-align: center; }
   .typing { align-self: flex-start; background: var(--them); border-radius: 18px; padding: 12px 14px; display: flex; gap: 4px; margin-top: 10px; }
   .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: bob 1.2s infinite; }
   .typing i:nth-child(2) { animation-delay: .15s; }
   .typing i:nth-child(3) { animation-delay: .3s; }
   @keyframes bob { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
-  form.compose { display: flex; gap: 8px; padding: 10px 12px 14px; border-top: 1px solid var(--line); }
+  .replybar { display: flex; gap: 6px; align-items: center; overflow-x: auto; padding: 8px 12px 0; border-top: 1px solid var(--line); }
+  .replybar > span { font-size: 12px; color: var(--muted); flex: none; }
+  .chip { display: flex; align-items: center; gap: 6px; border-radius: 16px; padding: 3px 10px 3px 3px; font-size: 13px; white-space: nowrap; flex: none; }
+  .chip .avatar { width: 24px; height: 24px; font-size: 13px; }
+  .chip.queued { border-color: var(--accent); }
+  form.compose { display: flex; gap: 8px; padding: 10px 12px 14px; }
+  .chat:not(.group) form.compose { border-top: 1px solid var(--line); }
   form.compose textarea { flex: 1; resize: none; background: var(--bg); border: 1px solid var(--line); border-radius: 20px; padding: 9px 14px; min-height: 42px; max-height: 140px; }
   form.compose button { border-radius: 20px; }
 
-  dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); padding: 20px; width: min(460px, calc(100vw - 32px)); }
+  dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); padding: 20px; width: min(500px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
   dialog::backdrop { background: rgb(0 0 0 / .45); }
   dialog h2 { margin: 0 0 4px; font-size: 18px; }
   dialog p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
   dialog label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
   dialog input, dialog select, dialog textarea { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
   dialog textarea { resize: vertical; min-height: 90px; }
+  #cPersona { min-height: 140px; }
   dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
   dialog .row .left { margin-right: auto; }
+  .checks { border: 1px solid var(--line); border-radius: 8px; padding: 4px; max-height: 180px; overflow-y: auto; }
+  .checks label { display: flex; align-items: center; gap: 8px; font-weight: 400; margin: 0; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+  .checks label:hover { background: var(--them); }
+  .checks input { width: auto; margin: 0; }
+  .checks .avatar { width: 24px; height: 24px; font-size: 13px; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
   a { color: var(--accent); }
 
@@ -92,21 +106,23 @@
     <header>
       <h1>Naive Chats</h1>
       <button class="icon-btn" id="addBtn" title="New contact" aria-label="New contact">＋</button>
+      <button class="icon-btn" id="groupBtn" title="New group chat" aria-label="New group chat">👥</button>
       <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">⚙︎</button>
     </header>
     <div class="contacts" id="contacts"></div>
     <footer id="modelNote"></footer>
   </aside>
 
-  <main class="chat">
+  <main class="chat" id="chat">
     <header>
-      <button class="icon-btn" id="back" aria-label="Back to contacts">‹</button>
+      <button class="icon-btn" id="back" aria-label="Back to chats">‹</button>
       <div class="avatar" id="chatAvatar"></div>
       <div class="who"><b id="chatName"></b><span id="chatStatus"></span></div>
-      <button class="icon-btn" id="editBtn" title="Edit contact" aria-label="Edit contact" hidden>✎</button>
+      <button class="icon-btn" id="editBtn" title="Edit" aria-label="Edit">✎</button>
       <button class="icon-btn" id="resetBtn" title="Start this chat over" aria-label="Start this chat over">↺</button>
     </header>
     <div id="log"></div>
+    <div class="replybar" id="replybar" hidden></div>
     <form class="compose" id="form">
       <textarea id="input" rows="1" placeholder="Text message"></textarea>
       <button class="primary" id="send">Send</button>
@@ -115,7 +131,7 @@
 </div>
 
 <dialog id="settings">
-  <form method="dialog" id="settingsForm">
+  <form method="dialog">
     <h2>Settings</h2>
     <p>Paste your Naive API key (from <a href="https://usenaive.ai/docs" target="_blank" rel="noopener">usenaive.ai</a>). It stays in this browser and is only sent with your messages to your vetta-video-studio Worker, which passes it on to Naive.</p>
     <label for="keyInput">API key</label>
@@ -132,19 +148,40 @@
 </dialog>
 
 <dialog id="contactDialog">
-  <form method="dialog" id="contactForm">
+  <form method="dialog">
     <h2 id="contactTitle">New contact</h2>
     <p>Describe who they are and how they text. They'll stay in character.</p>
     <label for="cName">Name</label>
     <input id="cName" maxlength="40" required>
     <label for="cEmoji">Avatar emoji</label>
     <input id="cEmoji" maxlength="4" placeholder="🙂">
-    <label for="cPersona">Personality</label>
+    <label for="cPersona">Persona</label>
     <textarea id="cPersona" required placeholder="My landlord. Never fixes anything, always mentions his boat."></textarea>
     <label for="cGreeting">First text from them</label>
     <input id="cGreeting" maxlength="300" placeholder="hey">
+    <div class="hint">Used when a chat with them starts (or is started over with ↺).</div>
+    <label>Knows about</label>
+    <div class="checks" id="cKnows"></div>
+    <div class="hint">In your 1-on-1 chat they'll know these people's names and personas. In group chats everyone knows everyone.</div>
     <div class="row">
-      <button type="button" class="left" id="deleteContact" hidden>Delete contact</button>
+      <button type="button" class="left" id="deleteContact">Delete contact</button>
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button class="primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="groupDialog">
+  <form method="dialog">
+    <h2 id="groupTitle">New group chat</h2>
+    <p>Nobody replies on their own here: tap a name under the chat to have that person reply.</p>
+    <label for="gName">Group name</label>
+    <input id="gName" maxlength="40" required placeholder="The Office">
+    <label>Members</label>
+    <div class="checks" id="gMembers"></div>
+    <div class="hint" id="gHint"></div>
+    <div class="row">
+      <button type="button" class="left" id="deleteGroup">Delete group</button>
       <button value="cancel" formnovalidate>Cancel</button>
       <button class="primary" value="save">Save</button>
     </div>
@@ -158,7 +195,7 @@
 const API = "https://vetta-video-studio.johnjones56222.workers.dev";
 const DEFAULT_MODEL = "anthropic/claude-sonnet-5.5";
 
-const STYLE = `You are texting the user in a phone messaging app. Write like a real text message: short, casual, usually 1-3 short lines. ` +
+const STYLE = `Write like a real text message: short, casual, usually 1-3 short lines. ` +
   `If you want to send more than one text in a row, separate them with a blank line. No stage directions, no narration, no quotation marks around your messages. ` +
   `Stay in character no matter what. Never say you are an AI, a language model, or an assistant, and never break the fourth wall.`;
 
@@ -216,6 +253,7 @@ const DEFAULT_CONTACTS = [
 ];
 
 const PALETTE = ["#3a7d5c", "#7b4fb3", "#b3485f", "#2f7f9e", "#9a7a1f", "#5b6bbf"];
+const GROUP_COLOR = "#4b5d7a";
 
 // ---- storage -----------------------------------------------------------------
 const store = {
@@ -225,24 +263,37 @@ const store = {
 };
 
 let customContacts = store.get("custom", []);
-let chats = store.get("chats", {}); // id -> [{ from: "me"|"them", text, at }]
+let overrides = store.get("overrides", {}); // edits to the built-in contacts: id -> { name, emoji, persona, greeting, knows }
+let groups = store.get("groups", []);       // [{ id, name, members: [contact ids] }]
+// thread id (contact id or group id) -> [{ from, text, at }]. `from` is "me", or
+// "them" in a 1-on-1 chat, or the sender's contact id in a group.
+let chats = store.get("chats", {});
 let unread = store.get("unread", {});
 let current = null;
-const busy = new Set();
+const busy = new Set();   // thread ids with a reply in progress
+const speaking = {};      // group id -> contact id currently typing
+const queues = {};        // group id -> contact ids waiting to reply
+const errors = {};
 
 const $ = (id) => document.getElementById(id);
-const contacts = () => [...DEFAULT_CONTACTS, ...customContacts];
+const isBuiltIn = (id) => DEFAULT_CONTACTS.some((c) => c.id === id);
+const contacts = () => [...DEFAULT_CONTACTS.map((c) => ({ ...c, ...overrides[c.id] })), ...customContacts];
 const byId = (id) => contacts().find((c) => c.id === id);
+const groupById = (id) => groups.find((g) => g.id === id);
+const members = (g) => g.members.map(byId).filter(Boolean);
+const knownBy = (c) => (c.knows || []).filter((id) => id !== c.id).map(byId).filter(Boolean);
 const apiKey = () => store.get("key", "");
 const model = () => store.get("model", DEFAULT_MODEL);
+const splitTexts = (s) => s.split(/\n\s*\n/).map((t) => t.trim()).filter(Boolean);
 
-function chatFor(c) {
-  if (!chats[c.id]) {
-    chats[c.id] = c.greeting ? splitTexts(c.greeting).map((text) => ({ from: "them", text, at: Date.now() })) : [];
-    unread[c.id] = true;
+function chatFor(id) {
+  if (!chats[id]) {
+    const c = byId(id);
+    chats[id] = c?.greeting ? splitTexts(c.greeting).map((text) => ({ from: "them", text, at: Date.now() })) : [];
+    if (chats[id].length) unread[id] = true;
     save();
   }
-  return chats[c.id];
+  return chats[id];
 }
 
 function save() {
@@ -250,29 +301,49 @@ function save() {
   store.set("unread", unread);
 }
 
-const splitTexts = (s) => s.split(/\n\s*\n/).map((t) => t.trim()).filter(Boolean);
+function senderName(threadId, m) {
+  if (m.from === "me") return "You";
+  return (m.from === "them" ? byId(threadId) : byId(m.from))?.name || "Someone";
+}
 
 // ---- rendering ---------------------------------------------------------------
 function avatar(el, c) {
   el.textContent = c.emoji || c.name[0];
   el.style.background = c.color;
 }
+const groupLook = (g) => ({ name: g.name, emoji: "👥", color: GROUP_COLOR });
+
+function contactButton(id, look, preview) {
+  const b = document.createElement("button");
+  b.className = "contact" + (id === current ? " active" : "");
+  b.innerHTML = `<div class="avatar"></div><div class="info"><div class="name"></div><div class="preview"></div></div>`;
+  avatar(b.querySelector(".avatar"), look);
+  b.querySelector(".name").textContent = look.name;
+  b.querySelector(".preview").textContent = preview;
+  if (unread[id] && id !== current) b.appendChild(Object.assign(document.createElement("span"), { className: "dot" }));
+  b.onclick = () => open(id);
+  return b;
+}
 
 function renderContacts() {
   const list = $("contacts");
   list.innerHTML = "";
+  if (groups.length) {
+    list.appendChild(Object.assign(document.createElement("div"), { className: "section", textContent: "Groups" }));
+    for (const g of groups) {
+      const msgs = chatFor(g.id);
+      const last = msgs[msgs.length - 1];
+      const preview = busy.has(g.id) ? `${byId(speaking[g.id])?.name || "Someone"} is typing…`
+        : last ? `${senderName(g.id, last)}: ${last.text}` : members(g).map((c) => c.name).join(", ");
+      list.appendChild(contactButton(g.id, groupLook(g), preview));
+    }
+    list.appendChild(Object.assign(document.createElement("div"), { className: "section", textContent: "Contacts" }));
+  }
   for (const c of contacts()) {
-    const msgs = chatFor(c);
+    const msgs = chatFor(c.id);
     const last = msgs[msgs.length - 1];
-    const b = document.createElement("button");
-    b.className = "contact" + (c.id === current ? " active" : "");
-    b.innerHTML = `<div class="avatar"></div><div class="info"><div class="name"><span></span></div><div class="preview"></div></div>`;
-    avatar(b.querySelector(".avatar"), c);
-    b.querySelector(".name span").textContent = c.name;
-    b.querySelector(".preview").textContent = busy.has(c.id) ? "typing…" : last ? (last.from === "me" ? "You: " : "") + last.text : "";
-    if (unread[c.id] && c.id !== current) b.appendChild(Object.assign(document.createElement("span"), { className: "dot" }));
-    b.onclick = () => open(c.id);
-    list.appendChild(b);
+    const preview = busy.has(c.id) ? "typing…" : last ? (last.from === "me" ? "You: " : "") + last.text : "";
+    list.appendChild(contactButton(c.id, c, preview));
   }
   $("modelNote").textContent = apiKey() ? "Model: " + model() : "Add your API key in Settings ⚙︎ to start.";
 }
@@ -285,31 +356,75 @@ function timeLabel(t) {
 }
 
 function renderChat() {
-  const c = byId(current);
-  if (!c) return;
-  avatar($("chatAvatar"), c);
-  $("chatName").textContent = c.name;
-  $("chatStatus").textContent = busy.has(c.id) ? "typing…" : c.status || "";
-  $("editBtn").hidden = !customContacts.some((x) => x.id === c.id);
+  const g = groupById(current);
+  const c = g ? null : byId(current);
+  if (!g && !c) return;
+  $("chat").classList.toggle("group", !!g);
+  avatar($("chatAvatar"), g ? groupLook(g) : c);
+  $("chatName").textContent = g ? g.name : c.name;
+  if (g) $("chatStatus").textContent = busy.has(g.id) ? `${byId(speaking[g.id])?.name || "Someone"} is typing…` : "You, " + members(g).map((m) => m.name).join(", ");
+  else $("chatStatus").textContent = busy.has(c.id) ? "typing…" : c.status || "";
+  $("editBtn").title = g ? "Edit group" : "Edit contact";
+
   const log = $("log");
   log.innerHTML = "";
-  let lastAt = 0;
-  for (const m of chatFor(c)) {
-    if (m.at - lastAt > 30 * 60_000) log.appendChild(Object.assign(document.createElement("div"), { className: "stamp", textContent: timeLabel(m.at) }));
+  const add = (cls, text) => log.appendChild(Object.assign(document.createElement("div"), { className: cls, textContent: text }));
+  if (g && !chatFor(g.id).length) add("stamp", `You made the group "${g.name}".\nSay something, then tap a name below to have them reply.`);
+  let lastAt = 0, lastFrom = null;
+  for (const m of chatFor(current)) {
+    if (m.at - lastAt > 30 * 60_000) { add("stamp", timeLabel(m.at)); lastFrom = null; }
     lastAt = m.at;
-    log.appendChild(Object.assign(document.createElement("div"), { className: "msg " + (m.from === "me" ? "me" : "them"), textContent: m.text }));
+    if (g && m.from !== "me" && m.from !== lastFrom) {
+      const s = byId(m.from);
+      const label = add("sender", s?.name || "Someone");
+      label.style.color = s?.color || "inherit";
+    }
+    lastFrom = m.from;
+    add("msg " + (m.from === "me" ? "me" : "them"), m.text);
   }
-  if (busy.has(c.id)) {
+  if (busy.has(current)) {
+    if (g) {
+      const s = byId(speaking[g.id]);
+      add("sender", s?.name || "").style.color = s?.color || "inherit";
+    }
     const t = document.createElement("div");
     t.className = "typing";
     t.innerHTML = "<i></i><i></i><i></i>";
+    if (g) t.style.marginTop = "2px";
     log.appendChild(t);
   }
-  if (errors[c.id]) log.appendChild(Object.assign(document.createElement("div"), { className: "msg err", textContent: errors[c.id] }));
+  if (errors[current]) add("msg err", errors[current]);
   log.scrollTop = log.scrollHeight;
+  renderReplyBar();
 }
 
-const errors = {};
+function renderReplyBar() {
+  const bar = $("replybar");
+  const g = groupById(current);
+  bar.hidden = !g;
+  if (!g) return;
+  bar.innerHTML = "<span>Reply:</span>";
+  const q = queues[g.id] || [];
+  for (const m of members(g)) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    const typing = busy.has(g.id) && speaking[g.id] === m.id;
+    const waiting = q.filter((id) => id === m.id).length;
+    if (waiting) b.classList.add("queued");
+    b.innerHTML = `<span class="avatar"></span><span></span>`;
+    avatar(b.firstChild, m);
+    b.lastChild.textContent = m.name + (typing ? " (typing…)" : waiting ? ` (next${waiting > 1 ? " ×" + waiting : ""})` : "");
+    b.title = `Have ${m.name} reply`;
+    b.onclick = () => askToReply(g.id, m.id);
+    bar.appendChild(b);
+  }
+}
+
+function refresh(threadId) {
+  renderContacts();
+  if (current === threadId) renderChat();
+}
 
 function open(id) {
   current = id;
@@ -323,73 +438,125 @@ function open(id) {
 }
 
 // ---- talking to the model ----------------------------------------------------
-function systemPrompt(c) {
-  return `${c.persona}\n\nYour name is ${c.name}.\n\n${STYLE}`;
+// Personas are written to the person themselves ("You are…"), so they're shown
+// to others with that note.
+function profiles(list) {
+  return list.map((p) => `- ${p.name}: ${p.persona}`).join("\n");
 }
 
-async function reply(c) {
-  if (!apiKey()) {
-    errors[c.id] = "Add your Naive API key in Settings ⚙︎ first.";
-    renderChat();
-    $("settingsBtn").click();
-    return;
+function systemPrompt(c, g) {
+  const parts = [c.persona, `Your name is ${c.name}.`];
+  if (g) {
+    const others = members(g).filter((m) => m.id !== c.id);
+    parts.push(`You are in a group text called "${g.name}" with the user and ${others.map((m) => m.name).join(", ") || "nobody else"}.`,
+      `You know everyone in the user's contacts. Their profiles are below; each is written to that person, so "you" there means them, not you.\n${profiles(contacts().filter((p) => p.id !== c.id))}`,
+      `Messages from others are shown as "Name: message", and the user's as "Me: message". Write only your own next text(s), as ${c.name}. ` +
+      `Never write messages for anyone else and don't start with your name. You can talk to anyone in the group, not just the user.`);
+  } else {
+    parts.push(`You are texting the user one-on-one in a phone messaging app.`);
+    const known = knownBy(c);
+    if (known.length) parts.push(`You know these people (they are not in this chat, but you can bring them up). Each profile is written to that person, so "you" there means them, not you.\n${profiles(known)}`);
   }
-  busy.add(c.id);
-  delete errors[c.id];
-  renderContacts();
-  if (current === c.id) renderChat();
+  parts.push(STYLE);
+  return parts.join("\n\n");
+}
+
+function buildMessages(threadId, c, g) {
+  const messages = [{ role: "system", content: systemPrompt(c, g) }];
+  for (const m of chatFor(threadId)) {
+    const own = g ? m.from === c.id : m.from === "them";
+    const content = g && !own ? `${m.from === "me" ? "Me" : senderName(threadId, m)}: ${m.text}` : m.text;
+    const role = own ? "assistant" : "user";
+    // Several texts in a row become one turn, the way the model writes them back.
+    const prev = messages[messages.length - 1];
+    if (prev.role === role) prev.content += "\n\n" + content;
+    else messages.push({ role, content });
+  }
+  if (g) {
+    const nudge = `(It's ${c.name}'s turn to text the group.)`;
+    const prev = messages[messages.length - 1];
+    if (prev.role === "user") prev.content += "\n\n" + nudge;
+    else messages.push({ role: "user", content: nudge });
+  }
+  return messages;
+}
+
+async function speak(threadId, speakerId) {
+  const g = groupById(threadId);
+  const c = byId(speakerId);
+  if (!c) return;
+  busy.add(threadId);
+  if (g) speaking[threadId] = speakerId;
+  delete errors[threadId];
+  refresh(threadId);
   try {
-    const messages = [
-      { role: "system", content: systemPrompt(c) },
-      ...chatFor(c).map((m) => ({ role: m.from === "me" ? "user" : "assistant", content: m.text })),
-    ];
-    // Several texts in a row become one turn, the way the model will write them back.
-    const merged = [];
-    for (const m of messages) {
-      const prev = merged[merged.length - 1];
-      if (prev && prev.role === m.role && m.role !== "system") prev.content += "\n\n" + m.content;
-      else merged.push({ ...m });
-    }
     const res = await fetch(API + "/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json", "x-vetta-key": apiKey() },
-      body: JSON.stringify({ model: model(), messages: merged, max_tokens: 1200 }),
+      body: JSON.stringify({ model: model(), messages: buildMessages(threadId, c, g), max_tokens: 1200 }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
-    const text = (data.choices?.[0]?.message?.content || "").trim();
-    if (!text) throw new Error("They left you on read (the model sent an empty reply). Try again.");
+    let text = (data.choices?.[0]?.message?.content || "").trim();
+    // Models in a group sometimes sign their texts "Name: …" like the transcript.
+    const prefix = c.name.toLowerCase() + ":";
+    text = splitTexts(text).map((t) => (t.toLowerCase().startsWith(prefix) ? t.slice(prefix.length).trim() : t)).filter(Boolean).join("\n\n");
+    if (!text) throw new Error(`${c.name} left you on read (the model sent an empty reply). Try again.`);
     // Send each text separately, with a short typing pause between them.
     const parts = splitTexts(text);
     for (let i = 0; i < parts.length; i++) {
       if (i) await new Promise((r) => setTimeout(r, Math.min(400 + parts[i].length * 25, 2200)));
-      chatFor(c).push({ from: "them", text: parts[i], at: Date.now() });
-      if (current !== c.id) unread[c.id] = true;
+      if (!chats[threadId]) break; // chat was started over meanwhile
+      chatFor(threadId).push({ from: g ? speakerId : "them", text: parts[i], at: Date.now() });
+      if (current !== threadId) unread[threadId] = true;
       save();
-      if (current === c.id) renderChat();
-      renderContacts();
+      refresh(threadId);
     }
   } catch (err) {
-    errors[c.id] = "Not delivered: " + err.message;
+    errors[threadId] = `${g ? c.name + "'s reply" : "Reply"} failed: ${err.message}`;
   } finally {
-    busy.delete(c.id);
-    renderContacts();
-    if (current === c.id) renderChat();
+    busy.delete(threadId);
+    delete speaking[threadId];
+    refresh(threadId);
   }
+}
+
+function needKey(threadId) {
+  if (apiKey()) return false;
+  errors[threadId] = "Add your Naive API key in Settings ⚙︎ first.";
+  refresh(threadId);
+  $("settingsBtn").click();
+  return true;
+}
+
+// Group replies run one at a time, so each person sees what the last one said.
+function askToReply(gid, cid) {
+  if (needKey(gid)) return;
+  (queues[gid] ||= []).push(cid);
+  renderReplyBar();
+  pump(gid);
+}
+
+async function pump(gid) {
+  if (busy.has(gid)) return;
+  const next = queues[gid]?.shift();
+  if (!next) return;
+  await speak(gid, next);
+  pump(gid);
 }
 
 $("form").onsubmit = (e) => {
   e.preventDefault();
-  const c = byId(current);
+  const g = groupById(current);
   const text = $("input").value.trim();
-  if (!c || !text || busy.has(c.id)) return;
+  if (!current || !text || (!g && busy.has(current))) return;
   $("input").value = "";
   autosize();
-  chatFor(c).push({ from: "me", text, at: Date.now() });
+  chatFor(current).push({ from: "me", text, at: Date.now() });
+  delete errors[current];
   save();
-  renderChat();
-  renderContacts();
-  reply(c);
+  refresh(current);
+  if (!g && !needKey(current)) speak(current, current);
 };
 
 function autosize() {
@@ -405,18 +572,18 @@ $("input").addEventListener("keydown", (e) => {
 $("back").onclick = () => { $("app").classList.remove("in-chat"); current = null; store.del("current"); renderContacts(); };
 
 $("resetBtn").onclick = () => {
-  const c = byId(current);
-  if (!c || busy.has(c.id) || !confirm(`Start your chat with ${c.name} over?`)) return;
-  delete chats[c.id];
-  delete errors[c.id];
-  chatFor(c);
-  unread[c.id] = false;
+  const name = groupById(current)?.name || byId(current)?.name;
+  if (!name || busy.has(current) || !confirm(`Start your chat with ${name} over?`)) return;
+  delete chats[current];
+  delete errors[current];
+  queues[current] = [];
+  chatFor(current);
+  unread[current] = false;
   save();
-  renderChat();
-  renderContacts();
+  refresh(current);
 };
 
-$("editBtn").onclick = () => editContact(current);
+$("editBtn").onclick = () => (groupById(current) ? editGroup(current) : editContact(current));
 
 // ---- settings ----------------------------------------------------------------
 async function loadModels() {
@@ -445,6 +612,7 @@ async function loadModels() {
 
 $("settingsBtn").onclick = () => {
   $("keyInput").value = apiKey();
+  $("settings").returnValue = "";
   $("settings").showModal();
   loadModels();
 };
@@ -456,28 +624,47 @@ $("settings").addEventListener("close", () => {
   renderContacts();
 });
 $("wipeBtn").onclick = () => {
-  if (!confirm("Delete every conversation? Contacts you added stay.")) return;
+  if (!confirm("Delete every conversation? Contacts and groups stay.")) return;
   chats = {};
   unread = {};
   for (const k in errors) delete errors[k];
+  for (const k in queues) queues[k] = [];
   save();
   renderContacts();
   renderChat();
-  $("settings").close();
+  $("settings").close("cancel");
 };
 
-// ---- custom contacts ---------------------------------------------------------
+// ---- editing contacts and groups --------------------------------------------
+function fillChecks(el, list, checked) {
+  el.innerHTML = "";
+  for (const c of list) {
+    const l = document.createElement("label");
+    l.innerHTML = `<input type="checkbox"><span class="avatar"></span><span></span>`;
+    l.firstChild.value = c.id;
+    l.firstChild.checked = checked.includes(c.id);
+    avatar(l.children[1], c);
+    l.lastChild.textContent = c.name;
+    el.appendChild(l);
+  }
+  if (!list.length) el.innerHTML = `<div class="hint" style="padding:6px">Nobody else yet.</div>`;
+}
+const checkedIds = (el) => [...el.querySelectorAll("input:checked")].map((i) => i.value);
+
 let editing = null;
 
 function editContact(id) {
   editing = id;
-  const c = id ? byId(id) : { name: "", emoji: "", persona: "", greeting: "" };
-  $("contactTitle").textContent = id ? "Edit contact" : "New contact";
+  const c = id ? byId(id) : { name: "", emoji: "", persona: "", greeting: "", knows: [] };
+  $("contactTitle").textContent = id ? `Edit ${c.name}` : "New contact";
   $("cName").value = c.name;
-  $("cEmoji").value = c.emoji;
+  $("cEmoji").value = c.emoji || "";
   $("cPersona").value = c.persona;
-  $("cGreeting").value = c.greeting;
+  $("cGreeting").value = c.greeting || "";
+  fillChecks($("cKnows"), contacts().filter((x) => x.id !== id), c.knows || []);
   $("deleteContact").hidden = !id;
+  $("deleteContact").textContent = isBuiltIn(id) ? "Reset to default" : "Delete contact";
+  $("contactDialog").returnValue = "";
   $("contactDialog").showModal();
 }
 
@@ -489,41 +676,98 @@ $("contactDialog").addEventListener("close", () => {
     emoji: $("cEmoji").value.trim(),
     persona: $("cPersona").value.trim(),
     greeting: $("cGreeting").value.trim(),
+    knows: checkedIds($("cKnows")),
   };
   if (!fields.name || !fields.persona) return;
   let id = editing;
-  if (id) Object.assign(customContacts.find((c) => c.id === id), fields);
-  else {
-    id = "c" + Date.now();
-    customContacts.push({ id, color: PALETTE[customContacts.length % PALETTE.length], status: "", ...fields });
+  if (isBuiltIn(id)) {
+    overrides[id] = fields;
+    store.set("overrides", overrides);
+  } else {
+    if (id) Object.assign(customContacts.find((c) => c.id === id), fields);
+    else {
+      id = "c" + Date.now();
+      customContacts.push({ id, color: PALETTE[customContacts.length % PALETTE.length], status: "", ...fields });
+    }
+    store.set("custom", customContacts);
   }
-  store.set("custom", customContacts);
   open(id);
 });
+
 $("deleteContact").onclick = () => {
   const c = byId(editing);
-  if (!c || !confirm(`Delete ${c.name} and your chat with them?`)) return;
+  if (!c) return;
+  if (isBuiltIn(editing)) {
+    if (!confirm(`Reset ${c.name}'s name, persona, greeting and who they know to the defaults? Your chat stays.`)) return;
+    delete overrides[editing];
+    store.set("overrides", overrides);
+    $("contactDialog").close("cancel");
+    open(editing);
+    return;
+  }
+  if (!confirm(`Delete ${c.name} and your chat with them? They'll also leave any groups.`)) return;
   customContacts = customContacts.filter((x) => x.id !== editing);
+  for (const g of groups) g.members = g.members.filter((m) => m !== editing);
   delete chats[editing];
   delete unread[editing];
   store.set("custom", customContacts);
+  store.set("groups", groups);
   save();
-  $("contactDialog").close();
-  current = null;
-  $("app").classList.remove("in-chat");
+  $("contactDialog").close("cancel");
+  open(DEFAULT_CONTACTS[0].id);
+};
+
+function editGroup(id) {
+  editing = id;
+  const g = id ? groupById(id) : { name: "", members: [] };
+  $("groupTitle").textContent = id ? "Edit group" : "New group chat";
+  $("gName").value = g.name;
+  fillChecks($("gMembers"), contacts(), g.members);
+  $("gHint").textContent = "";
+  $("deleteGroup").hidden = !id;
+  $("groupDialog").returnValue = "";
+  $("groupDialog").showModal();
+}
+
+$("groupBtn").onclick = () => editGroup(null);
+$("groupDialog").addEventListener("close", () => {
+  if ($("groupDialog").returnValue !== "save") return;
+  const name = $("gName").value.trim();
+  const picked = checkedIds($("gMembers"));
+  if (!name) return;
+  if (!picked.length) {
+    $("groupDialog").showModal();
+    $("gHint").textContent = "Pick at least one member.";
+    return;
+  }
+  let id = editing;
+  if (id) Object.assign(groupById(id), { name, members: picked });
+  else {
+    id = "g" + Date.now();
+    groups.push({ id, name, members: picked });
+  }
+  store.set("groups", groups);
+  open(id);
+});
+
+$("deleteGroup").onclick = () => {
+  const g = groupById(editing);
+  if (!g || !confirm(`Delete the group "${g.name}" and its messages?`)) return;
+  groups = groups.filter((x) => x.id !== editing);
+  delete chats[editing];
+  delete unread[editing];
+  delete queues[editing];
+  store.set("groups", groups);
+  save();
+  $("groupDialog").close("cancel");
   open(DEFAULT_CONTACTS[0].id);
 };
 
 // ---- start -------------------------------------------------------------------
 const start = store.get("current", null);
-if (start && byId(start)) open(start);
-else {
-  current = DEFAULT_CONTACTS[0].id;
-  renderContacts();
-  renderChat();
-  if (matchMedia("(max-width: 720px)").matches) current = null;
-  else open(current);
-}
+if (start && (byId(start) || groupById(start))) open(start);
+else if (matchMedia("(max-width: 720px)").matches) renderContacts();
+else open(DEFAULT_CONTACTS[0].id);
 if (!apiKey()) $("settingsBtn").click();
 </script>
 </body>
