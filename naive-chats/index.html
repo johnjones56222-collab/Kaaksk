@@ -57,6 +57,18 @@
   .msg.me + .msg.them, .msg.them + .msg.me { margin-top: 10px; }
   .sender { align-self: flex-start; font-size: 12px; font-weight: 600; margin: 10px 0 0 12px; }
   .msg.err { align-self: center; background: none; color: var(--danger); font-size: 13px; text-align: center; }
+  .msg:not(.err) { cursor: pointer; }
+  .msg.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .msg-actions { display: flex; gap: 6px; margin: 4px 0 6px; }
+  .msg-actions.me { align-self: flex-end; }
+  .msg-actions.them { align-self: flex-start; }
+  .msg-actions button { font-size: 12px; padding: 3px 10px; border-radius: 12px; }
+  .msg-actions .danger { color: var(--danger); }
+  .msg-edit { display: flex; flex-direction: column; gap: 4px; width: min(75%, 480px); }
+  .msg-edit.me { align-self: flex-end; }
+  .msg-edit.them { align-self: flex-start; }
+  .msg-edit textarea { resize: vertical; min-height: 64px; border-radius: 12px; border: 1px solid var(--accent); background: var(--bg); padding: 8px 12px; }
+  .msg-edit .msg-actions { align-self: flex-end; margin: 0; }
   .stamp { align-self: center; color: var(--muted); font-size: 12px; margin: 6px 0; text-align: center; }
   .typing { align-self: flex-start; background: var(--them); border-radius: 18px; padding: 12px 14px; display: flex; gap: 4px; margin-top: 10px; }
   .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: bob 1.2s infinite; }
@@ -157,9 +169,14 @@
     <input id="cEmoji" maxlength="4" placeholder="🙂">
     <label for="cPersona">Persona</label>
     <textarea id="cPersona" required placeholder="My landlord. Never fixes anything, always mentions his boat."></textarea>
-    <label for="cGreeting">First text from them</label>
-    <input id="cGreeting" maxlength="300" placeholder="hey">
-    <div class="hint">Used when a chat with them starts (or is started over with ↺).</div>
+    <label for="cGreetMode">Greeting</label>
+    <select id="cGreetMode">
+      <option value="preset">Preset text</option>
+      <option value="auto">Auto-generate (they write their own first text)</option>
+      <option value="off">No greeting</option>
+    </select>
+    <input id="cGreeting" maxlength="300" placeholder="Their first text" style="margin-top:6px">
+    <div class="hint" id="cGreetHint"></div>
     <label>Knows about</label>
     <div class="checks" id="cKnows"></div>
     <div class="hint">In your 1-on-1 chat they'll know these people's names and personas. In group chats everyone knows everyone.</div>
@@ -269,11 +286,14 @@ let groups = store.get("groups", []);       // [{ id, name, members: [contact id
 // "them" in a 1-on-1 chat, or the sender's contact id in a group.
 let chats = store.get("chats", {});
 let unread = store.get("unread", {});
+let greetPending = store.get("greet", {}); // contact ids whose auto-generated first text hasn't arrived yet
 let current = null;
 const busy = new Set();   // thread ids with a reply in progress
 const speaking = {};      // group id -> contact id currently typing
 const queues = {};        // group id -> contact ids waiting to reply
 const errors = {};
+let selMsg = null;  // index of the tapped message in the open chat
+let editMsg = null; // index of the message being edited
 
 const $ = (id) => document.getElementById(id);
 const isBuiltIn = (id) => DEFAULT_CONTACTS.some((c) => c.id === id);
@@ -284,13 +304,20 @@ const members = (g) => g.members.map(byId).filter(Boolean);
 const knownBy = (c) => (c.knows || []).filter((id) => id !== c.id).map(byId).filter(Boolean);
 const apiKey = () => store.get("key", "");
 const model = () => store.get("model", DEFAULT_MODEL);
+// Contacts saved before greeting modes existed: a greeting text means preset.
+const greetMode = (c) => c.greetMode || (c.greeting ? "preset" : "off");
 const splitTexts = (s) => s.split(/\n\s*\n/).map((t) => t.trim()).filter(Boolean);
 
 function chatFor(id) {
   if (!chats[id]) {
     const c = byId(id);
-    chats[id] = c?.greeting ? splitTexts(c.greeting).map((text) => ({ from: "them", text, at: Date.now() })) : [];
+    const mode = c ? greetMode(c) : "off";
+    chats[id] = mode === "preset" ? splitTexts(c.greeting || "").map((text) => ({ from: "them", text, at: Date.now() })) : [];
     if (chats[id].length) unread[id] = true;
+    if (mode === "auto") {
+      greetPending[id] = true;
+      queueMicrotask(flushGreetings);
+    }
     save();
   }
   return chats[id];
@@ -299,6 +326,7 @@ function chatFor(id) {
 function save() {
   store.set("chats", chats);
   store.set("unread", unread);
+  store.set("greet", greetPending);
 }
 
 function senderName(threadId, m) {
@@ -355,7 +383,7 @@ function timeLabel(t) {
     d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
-function renderChat() {
+function renderChat(toBottom = false) {
   const g = groupById(current);
   const c = g ? null : byId(current);
   if (!g && !c) return;
@@ -367,11 +395,15 @@ function renderChat() {
   $("editBtn").title = g ? "Edit group" : "Edit contact";
 
   const log = $("log");
+  // Stay where the reader is unless they were already at the bottom.
+  const stick = toBottom || log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+  const top = log.scrollTop;
   log.innerHTML = "";
   const add = (cls, text) => log.appendChild(Object.assign(document.createElement("div"), { className: cls, textContent: text }));
   if (g && !chatFor(g.id).length) add("stamp", `You made the group "${g.name}".\nSay something, then tap a name below to have them reply.`);
   let lastAt = 0, lastFrom = null;
-  for (const m of chatFor(current)) {
+  const msgs = chatFor(current);
+  msgs.forEach((m, i) => {
     if (m.at - lastAt > 30 * 60_000) { add("stamp", timeLabel(m.at)); lastFrom = null; }
     lastAt = m.at;
     if (g && m.from !== "me" && m.from !== lastFrom) {
@@ -380,8 +412,23 @@ function renderChat() {
       label.style.color = s?.color || "inherit";
     }
     lastFrom = m.from;
-    add("msg " + (m.from === "me" ? "me" : "them"), m.text);
-  }
+    const side = m.from === "me" ? "me" : "them";
+    if (editMsg === i) {
+      log.appendChild(editBox(msgs, i, side));
+      return;
+    }
+    const bubble = add(`msg ${side}${selMsg === i ? " selected" : ""}`, m.text);
+    bubble.onclick = () => { selMsg = selMsg === i ? null : i; editMsg = null; renderChat(); };
+    if (selMsg === i) {
+      const row = document.createElement("div");
+      row.className = "msg-actions " + side;
+      row.innerHTML = `<button type="button">Edit</button><button type="button" class="danger">Delete</button><button type="button">Cancel</button>`;
+      row.children[0].onclick = () => { editMsg = i; renderChat(); };
+      row.children[1].onclick = () => { msgs.splice(i, 1); selMsg = null; save(); refresh(current); };
+      row.children[2].onclick = () => { selMsg = null; renderChat(); };
+      log.appendChild(row);
+    }
+  });
   if (busy.has(current)) {
     if (g) {
       const s = byId(speaking[g.id]);
@@ -394,8 +441,33 @@ function renderChat() {
     log.appendChild(t);
   }
   if (errors[current]) add("msg err", errors[current]);
-  log.scrollTop = log.scrollHeight;
+  log.scrollTop = stick ? log.scrollHeight : top;
   renderReplyBar();
+  log.querySelector(".msg-edit textarea")?.focus();
+}
+
+function editBox(msgs, i, side) {
+  const box = document.createElement("div");
+  box.className = "msg-edit " + side;
+  box.innerHTML = `<textarea aria-label="Edit message"></textarea><div class="msg-actions"><button type="button">Cancel</button><button type="button" class="primary">Save</button></div>`;
+  const ta = box.querySelector("textarea");
+  ta.value = msgs[i].text;
+  const done = () => { editMsg = selMsg = null; renderChat(); };
+  const commit = () => {
+    const text = ta.value.trim();
+    if (text) msgs[i].text = text;
+    else msgs.splice(i, 1); // saving it empty deletes it
+    save();
+    editMsg = selMsg = null;
+    refresh(current);
+  };
+  box.querySelector("button").onclick = done;
+  box.querySelector(".primary").onclick = commit;
+  ta.onkeydown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); commit(); }
+    if (e.key === "Escape") { e.preventDefault(); done(); }
+  };
+  return box;
 }
 
 function renderReplyBar() {
@@ -428,12 +500,13 @@ function refresh(threadId) {
 
 function open(id) {
   current = id;
+  selMsg = editMsg = null;
   unread[id] = false;
   save();
   store.set("current", id);
   $("app").classList.add("in-chat");
   renderContacts();
-  renderChat();
+  renderChat(true);
   if (matchMedia("(min-width: 721px)").matches) $("input").focus();
 }
 
@@ -461,7 +534,7 @@ function systemPrompt(c, g) {
   return parts.join("\n\n");
 }
 
-function buildMessages(threadId, c, g) {
+function buildMessages(threadId, c, g, greeting) {
   const messages = [{ role: "system", content: systemPrompt(c, g) }];
   for (const m of chatFor(threadId)) {
     const own = g ? m.from === c.id : m.from === "them";
@@ -472,16 +545,19 @@ function buildMessages(threadId, c, g) {
     if (prev.role === role) prev.content += "\n\n" + content;
     else messages.push({ role, content });
   }
-  if (g) {
-    const nudge = `(It's ${c.name}'s turn to text the group.)`;
+  if (g || greeting) {
+    const nudge = g ? `(It's ${c.name}'s turn to text the group.)`
+      : `(Start the conversation: send the user your first text out of nowhere, in character, about something that fits who you are.)`;
     const prev = messages[messages.length - 1];
     if (prev.role === "user") prev.content += "\n\n" + nudge;
     else messages.push({ role: "user", content: nudge });
   }
+  // Some models need the conversation to open with the user, even when they texted first.
+  if (messages[1]?.role === "assistant") messages.splice(1, 0, { role: "user", content: "(The chat starts here.)" });
   return messages;
 }
 
-async function speak(threadId, speakerId) {
+async function speak(threadId, speakerId, { greeting = false } = {}) {
   const g = groupById(threadId);
   const c = byId(speakerId);
   if (!c) return;
@@ -493,7 +569,7 @@ async function speak(threadId, speakerId) {
     const res = await fetch(API + "/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json", "x-vetta-key": apiKey() },
-      body: JSON.stringify({ model: model(), messages: buildMessages(threadId, c, g), max_tokens: 1200 }),
+      body: JSON.stringify({ model: model(), messages: buildMessages(threadId, c, g, greeting), max_tokens: 1200 }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data.error) throw new Error(data.error || `Request failed (${res.status})`);
@@ -508,16 +584,26 @@ async function speak(threadId, speakerId) {
       if (i) await new Promise((r) => setTimeout(r, Math.min(400 + parts[i].length * 25, 2200)));
       if (!chats[threadId]) break; // chat was started over meanwhile
       chatFor(threadId).push({ from: g ? speakerId : "them", text: parts[i], at: Date.now() });
+      delete greetPending[threadId];
       if (current !== threadId) unread[threadId] = true;
       save();
       refresh(threadId);
     }
   } catch (err) {
-    errors[threadId] = `${g ? c.name + "'s reply" : "Reply"} failed: ${err.message}`;
+    errors[threadId] = `${g ? c.name + "'s reply" : greeting ? c.name + "'s first text" : "Reply"} failed: ${err.message}`;
   } finally {
     busy.delete(threadId);
     delete speaking[threadId];
     refresh(threadId);
+  }
+}
+
+// Sends the auto-generated first texts that are still owed (new or restarted chats).
+function flushGreetings() {
+  if (!apiKey()) return;
+  for (const id of Object.keys(greetPending)) {
+    if (!byId(id)) delete greetPending[id];
+    else if (!busy.has(id)) speak(id, id, { greeting: true });
   }
 }
 
@@ -554,8 +640,11 @@ $("form").onsubmit = (e) => {
   autosize();
   chatFor(current).push({ from: "me", text, at: Date.now() });
   delete errors[current];
+  delete greetPending[current]; // you texted first, so no auto greeting
+  selMsg = editMsg = null;
   save();
-  refresh(current);
+  renderContacts();
+  renderChat(true);
   if (!g && !needKey(current)) speak(current, current);
 };
 
@@ -576,7 +665,9 @@ $("resetBtn").onclick = () => {
   if (!name || busy.has(current) || !confirm(`Start your chat with ${name} over?`)) return;
   delete chats[current];
   delete errors[current];
+  delete greetPending[current];
   queues[current] = [];
+  selMsg = editMsg = null;
   chatFor(current);
   unread[current] = false;
   save();
@@ -622,11 +713,13 @@ $("settings").addEventListener("close", () => {
   store.set("key", $("keyInput").value.trim());
   store.set("model", $("modelSelect").value || DEFAULT_MODEL);
   renderContacts();
+  flushGreetings();
 });
 $("wipeBtn").onclick = () => {
   if (!confirm("Delete every conversation? Contacts and groups stay.")) return;
   chats = {};
   unread = {};
+  greetPending = {};
   for (const k in errors) delete errors[k];
   for (const k in queues) queues[k] = [];
   save();
@@ -661,12 +754,26 @@ function editContact(id) {
   $("cEmoji").value = c.emoji || "";
   $("cPersona").value = c.persona;
   $("cGreeting").value = c.greeting || "";
+  $("cGreetMode").value = id ? greetMode(c) : "auto";
+  showGreetMode();
   fillChecks($("cKnows"), contacts().filter((x) => x.id !== id), c.knows || []);
   $("deleteContact").hidden = !id;
   $("deleteContact").textContent = isBuiltIn(id) ? "Reset to default" : "Delete contact";
   $("contactDialog").returnValue = "";
   $("contactDialog").showModal();
 }
+
+const GREET_HINTS = {
+  preset: "Sent as their first text when a chat with them starts (or is started over with ↺).",
+  auto: "When a chat with them starts (or is started over with ↺), they write their own first text in character. Turn this off to save credits.",
+  off: "Chats with them start empty. They only text after you do.",
+};
+function showGreetMode() {
+  const mode = $("cGreetMode").value;
+  $("cGreeting").hidden = mode !== "preset";
+  $("cGreetHint").textContent = GREET_HINTS[mode];
+}
+$("cGreetMode").onchange = showGreetMode;
 
 $("addBtn").onclick = () => editContact(null);
 $("contactDialog").addEventListener("close", () => {
@@ -676,6 +783,7 @@ $("contactDialog").addEventListener("close", () => {
     emoji: $("cEmoji").value.trim(),
     persona: $("cPersona").value.trim(),
     greeting: $("cGreeting").value.trim(),
+    greetMode: $("cGreetMode").value,
     knows: checkedIds($("cKnows")),
   };
   if (!fields.name || !fields.persona) return;
@@ -710,6 +818,7 @@ $("deleteContact").onclick = () => {
   for (const g of groups) g.members = g.members.filter((m) => m !== editing);
   delete chats[editing];
   delete unread[editing];
+  delete greetPending[editing];
   store.set("custom", customContacts);
   store.set("groups", groups);
   save();

@@ -13,6 +13,13 @@ Default contacts, each with their own opening text:
 - **Claude-Obsessed Friend**: brings every topic back to Claude.
 - **John Johnson (Accounting)**: the most generic person in history.
 
+- Tap any message (yours or theirs, in any chat) to edit or delete it.
+  Saving an edited message empty deletes it.
+- **Greeting** (in the ✎ dialog) sets how a chat with someone starts: their
+  preset text, an auto-generated first text they write in character, or no
+  greeting at all. The built-in contacts use their preset text; new contacts
+  default to auto-generated. It applies when a chat starts or is started over
+  with ↺.
 - ＋ adds a contact. ✎ edits anyone's name, emoji, persona and first text,
   built-in contacts included ("Reset to default" undoes your edits to those).
 - **Knows about** (in the ✎ dialog) picks which other contacts someone knows in
