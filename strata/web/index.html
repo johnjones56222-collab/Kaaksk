@@ -89,6 +89,7 @@
   var statusEl = document.getElementById('status');
 
   function fail(title, text) {
+    if (typeof devLog === 'function') devLog('page error: ' + title + ': ' + text);
     document.getElementById('error-title').textContent = title;
     document.getElementById('error-text').textContent = text;
     document.getElementById('error').classList.remove('hidden');
@@ -119,12 +120,20 @@
   // which sw.js adds once it is installed); otherwise use the single-threaded one.
   var threaded = self.crossOriginIsolated === true && typeof SharedArrayBuffer !== 'undefined';
 
+  // On a local dev server (tools/serve_web.py) the game's log is mirrored to
+  // the server's terminal: phones have no developer console.
+  var local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  function devLog(text) {
+    if (!local || !navigator.sendBeacon) return;
+    try { navigator.sendBeacon('__strata/log', String(text).slice(0, 2000)); } catch (e) { /* best effort */ }
+  }
+
   var lastError = '';
   window.Module = {
     canvas: canvas,
     arguments: args,
-    print: function (text) { console.log(text); },
-    printErr: function (text) { console.warn(text); if (/error/.test(text)) lastError = text; },
+    print: function (text) { console.log(text); devLog(text); },
+    printErr: function (text) { console.warn(text); devLog(text); if (/error/.test(text)) lastError = text; },
     setStatus: function (text) { if (text) statusEl.textContent = text; },
     onAbort: function (what) {
       fail('Strata stopped', 'Something went wrong: ' + (lastError || what) + '. Reloading usually helps.');
@@ -132,6 +141,8 @@
     strataReady: function () {
       loading.classList.add('hidden');
       hintRotation();
+      devLog('page ready: ' + (threaded ? 'multi-threaded' : 'single-threaded') + ' build, ' + innerWidth + 'x' +
+             innerHeight + ' CSS px at ' + devicePixelRatio + 'x, ' + navigator.userAgent);
     },
     strataFail: function (text) { fail('Strata cannot start', text); }
   };
