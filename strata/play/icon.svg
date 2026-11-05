@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f6f9e"/>
+      <stop offset="0.62" stop-color="#9cc3df"/>
+      <stop offset="1" stop-color="#e8d7b3"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#sky)"/>
+  <!-- An isometric block cut to show its layers: grass, soil, stone. -->
+  <g stroke="#1b2129" stroke-width="6" stroke-linejoin="round">
+    <path d="M256 118 L392 190 L256 262 L120 190 Z" fill="#79b84e"/>
+    <path d="M120 190 L256 262 L256 300 L120 228 Z" fill="#5f9a3c"/>
+    <path d="M256 262 L392 190 L392 228 L256 300 Z" fill="#4c7f30"/>
+    <path d="M120 228 L256 300 L256 340 L120 268 Z" fill="#8a5d3b"/>
+    <path d="M256 300 L392 228 L392 268 L256 340 Z" fill="#6f4a2f"/>
+    <path d="M120 268 L256 340 L256 394 L120 322 Z" fill="#8b8f96"/>
+    <path d="M256 340 L392 268 L392 322 L256 394 Z" fill="#6c7078"/>
+  </g>
+  <path d="M182 300 L206 313 M300 344 L330 328 M150 296 L166 304" stroke="#5c6067" stroke-width="7" stroke-linecap="round"/>
+</svg>
