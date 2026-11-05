@@ -61,7 +61,7 @@ if [ "${1:-}" != "--offline" ]; then
 fi
 
 stop_server
-nohup python "$dir/serve_web.py" "$dir/site" --host 127.0.0.1 --port "$port" > "$dir/server.log" 2>&1 &
+nohup python "$dir/serve_web.py" "$dir/site" --host 127.0.0.1 --port "$port" < /dev/null > "$dir/server.log" 2>&1 &
 # Keep Termux, and with it the server, running while the browser is in front.
 termux-wake-lock 2> /dev/null || true
 for _ in 1 2 3 4 5 6 7 8 9 10; do
