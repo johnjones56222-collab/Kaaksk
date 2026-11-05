@@ -1,0 +1,9 @@
+# Build output
+build*/
+/out/
+__pycache__/
+*.pyc
+# Files the game writes when run from the source tree
+/saves/
+/screenshots/
+strata_settings.txt
