@@ -17,8 +17,10 @@ export function buildCargo(ctx) {
     floor: 'tread',
     windows: [{ side: 'S', a: -8, b: 8, y0: 0.4, y1: 5.8, pane: 4, noGlass: true }],
     ceilLights: { spacing: 6.6, intensity: 1.25, color: 0xfff2d8 },
+    ducts: { size: 0.9, only: 2 },
     lightRange: 11,
     ribs: 4.5,
+    upperKit: { from: 4.2, max: 2.2 },
     ribSkip: (side) => side === 'S',
   });
   // atmosphere shield across the hangar mouth
@@ -89,6 +91,14 @@ export function buildCargo(ctx) {
   b.box('metalDark', 4.0, 4.3, 36.5, 0.3, 0.3, 0.3, { fine: false });
   b.tor('metal', 4.0, 4.0, 36.5, 0.14, 0.035, { seg: 12, arc: PI * 1.5 });
   b.gbox(G(0xffb347, 3, 0, 3), 4.0, 6.1, 37.12, 0.1, 0.1, 0.02);
+  const load = ctx.dyn(4.0, 3.86, 36.5, 0.3, (db) => {
+    db.box('crateOrange', 0, -1.0, 0, 1.3, 1.3, 1.3, { uv: 'fit', fine: false });
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) db.tube('rubber', [[sx * 0.6, -0.36, sz * 0.6], [0, 0.02, 0]], 0.014, { seg: 4 });
+  });
+  ctx.tick((dt, t) => {
+    load.rotation.z = Math.sin(t * 0.7) * 0.025;
+    load.rotation.x = Math.sin(t * 0.53 + 1) * 0.02;
+  });
   // ---- loader bot ----
   b.at(4.2, 0, 41.2, -0.6, (bb) => {
     bb.box('yellow', 0, 0.7, 0, 1.1, 0.8, 1.5);

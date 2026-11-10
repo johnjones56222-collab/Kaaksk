@@ -147,6 +147,31 @@ fs.mkdirSync(outDir, { recursive: true });
   await ev(`d.teleport('medbay', 90)`);
   await page.waitForTimeout(700);
   await shot('10-medbay-fire');
+  // hazard: standing in the flames hurts, and running out of health respawns you in the hub
+  {
+    await ev(`const f = g.world.refs.fire1; g.player.place(f.x, f.z + 0.2, 0, 0); g.player.health = 30;`);
+    await waitFor(`g.player.health < 30 || g.mode !== 'play'`, 30000).catch(() => note('fire did not hurt the player'));
+    await ev(`g.player.health = 0.5`);
+    await waitFor(`g.mode === 'play' && g.player.health > 90 && d.info().room === 'hub'`, 40000).catch(() => note('no respawn after health ran out'));
+    log('fire hazard and respawn ok');
+  }
+  // quit to the title mid-mission, then continue from the save
+  {
+    const before = await ev('return d.step()');
+    await ev(`g.pause('mission')`);
+    await page.waitForSelector('#overlay-pause:not([hidden])');
+    await page.click('#overlay-pause .btn.danger');
+    await waitFor(`g.mode === 'menu'`);
+    const first = await page.textContent('#overlay-menu .btn.primary');
+    if (first !== 'Continue') note(`title offers "${first}" instead of Continue`);
+    await page.click('#overlay-menu .btn.primary');
+    await waitFor(`g.mode === 'play'`, 30000);
+    await frames(3);
+    const after = await ev('return d.step()');
+    if (after !== before) note(`continue landed on ${after}, expected ${before}`);
+    if (!(await ev(`return g.world.refs.fire1.on`))) note('fires not burning after continue');
+    log('quit and continue ok');
+  }
   for (const n of [1, 2, 3, 4]) await use(`fire${n}`, { expectFocus: false });
   await expectStep('compound');
   await use('synth', { solve: true });
@@ -164,7 +189,33 @@ fs.mkdirSync(outDir, { recursive: true });
   await page.waitForTimeout(1500);
   await expectStep('breaches');
   await shot('12-eva');
-  for (const n of [1, 2, 3]) await use(`breach${n}`, { anchor: `breachStand${n}`, expectFocus: false });
+  // hazard: suit oxygen runs out -> pulled back inside, then go out again
+  {
+    await ev(`g.o2 = 0.4`);
+    await waitFor(`g.mode === 'play' && !g.player.eva`, 40000).catch(() => note('no retrieval when suit oxygen ran out'));
+    await frames(3);
+    const room = await ev('return d.info().room');
+    if (room !== 'airlock') note(`after retrieval the player is in ${room}`);
+    if (await ev(`return d.has('evaDone')`)) note('EVA marked done after a forced retrieval');
+    await frames(3);
+    await use('cycle', { waitMode: null });
+    await waitFor(`g.mode === 'play' && g.player.eva`, 40000);
+    await page.waitForTimeout(1200);
+    log('oxygen hazard and second excursion ok');
+  }
+  // welding through the real hold-to-work path
+  {
+    await ev(`d.approach('breachStand1')`);
+    await frames(3);
+    await ev(`const a = g.world.anchors.breach1; const p = g.player; p.yaw = Math.atan2(-(a.x - p.x), -(a.z - p.z)); p.pitch = -0.25;`);
+    await frames(3);
+    const f = await ev('return d.focus()');
+    if (f !== 'breach1') note(`weld focus: wanted breach1, got ${f}`);
+    await page.keyboard.down('KeyE');
+    await waitFor(`d.has('breach1')`, 60000).catch(() => note('hold-to-weld on breach 1 never completed'));
+    await page.keyboard.up('KeyE');
+  }
+  for (const n of [2, 3]) await use(`breach${n}`, { anchor: `breachStand${n}`, expectFocus: false });
   await expectStep('antenna');
   await use('dish', { solve: true });
   await expectStep('return');
@@ -186,6 +237,14 @@ fs.mkdirSync(outDir, { recursive: true });
   await page.mouse.down();
   await page.waitForTimeout(1200);
   await page.mouse.up();
+  // pause and resume inside gunnery, and survive a failed wave
+  await ev(`g.pause('help')`);
+  await page.waitForSelector('#overlay-pause:not([hidden])');
+  await page.click('#overlay-pause .btn.primary');
+  await waitFor(`g.mode === 'turret'`, 10000).catch(() => note('resume did not return to the turret'));
+  await ev('g.turret._fail()');
+  await page.waitForTimeout(800);
+  if ((await ev('return g.turret.hull')) !== 100) note('turret hull not reset after a failed wave');
   await ev('g.turret.forceWin()');
   await waitFor(`g.mode === 'play'`, 30000);
   await expectStep('route');

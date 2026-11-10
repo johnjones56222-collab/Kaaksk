@@ -12,6 +12,7 @@ export function buildCryo(ctx) {
   ctx.shell({
     windows: [{ side: 'W', a: -1, b: 5, y0: 1.05, y1: 3.0 }],
     ceilLights: { spacing: 4.6, intensity: 0.8, color: 0xcfe8ff },
+    ducts: { size: 0.46 },
     ribSkip: (side) => side !== 'W',
   });
   const xs = [-13.6, -10.6, -7.6, -4.6];

@@ -19,6 +19,7 @@ export function buildHub(ctx) {
     ceilLights: { spacing: 5.2, intensity: 1.2, color: 0xe4f2ff },
     lightRange: 10.5,
     ribs: 4,
+    upperKit: { from: 4.05, max: 1.6 },
   });
 
   // gallery band halfway up the walls

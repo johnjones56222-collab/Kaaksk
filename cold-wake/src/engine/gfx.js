@@ -99,7 +99,7 @@ export class Gfx {
     const mainPass = new RenderPass(this.scene, this.camera);
     mainPass.clear = false;
     mainPass.clearDepth = true;
-    const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.55, 0.62, 1.0);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.45, 0.58, 1.0);
     composer.addPass(spacePass);
     composer.addPass(mainPass);
     composer.addPass(bloom);
@@ -170,7 +170,7 @@ export class Gfx {
     r.toneMappingExposure = 1.05 * settings.brightness;
     this.spaceCamera.quaternion.copy(this.camera.getWorldQuaternion(_q));
     if (this.composer) {
-      this.bloom.strength = 0.55 + this.bloomBoost;
+      this.bloom.strength = 0.45 + this.bloomBoost;
       this.composer.render();
     } else {
       r.setRenderTarget(null);

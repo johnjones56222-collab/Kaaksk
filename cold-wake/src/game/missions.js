@@ -235,6 +235,7 @@ export const missions = {
     if (s && s.start) {
       if (resumed) say(has('vegaOnline') ? V : SYS, has('vegaOnline') ? 'Welcome back. Picking up where we left off.' : 'Session restored.');
       else s.start();
+      if (!resumed && this.index === 0) hud.banner('MISSION 01', MISSION_NAMES[1]);
     }
     this.refresh();
   },
@@ -249,7 +250,7 @@ export const missions = {
       const next = this.step;
       if (next && next.m !== prev.m) {
         audio.sfx('mission');
-        hud.toast(MISSION_NAMES[next.m], 'good', `MISSION ${String(next.m).padStart(2, '0')}`);
+        hud.banner(`MISSION ${String(next.m).padStart(2, '0')}`, MISSION_NAMES[next.m]);
       } else {
         audio.sfx('objective');
       }

@@ -14,6 +14,7 @@ export function buildQuarters(ctx) {
   ctx.shell({
     windows: [{ side: 'E', a: -33, b: -28, y0: 1.0, y1: 2.7 }],
     ceilLights: { spacing: 4.4, intensity: 0.8, color: 0xffe2c0 },
+    ducts: { size: 0.4 },
     ribSkip: (side, u) => side === 'N' || side === 'S' || (side === 'W' && u < -29),
   });
   // bunks along the bow wall, with dividers

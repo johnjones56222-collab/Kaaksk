@@ -21,6 +21,7 @@ export function buildEngineering(ctx) {
     ceilLights: null,
     beams: 5,
     ribs: 4,
+    upperKit: { from: 5.6, max: 2.4 },
     emergencyAt: [[-8, 12], [8, 12], [-8, 28], [8, 28]],
   });
   // high-bay lamps

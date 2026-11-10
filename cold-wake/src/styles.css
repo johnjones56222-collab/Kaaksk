@@ -16,8 +16,8 @@
   --violet: #b79bff;
   --display: "Eurostile", "Bank Gothic", "Rajdhani", "Segoe UI", "Roboto", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
-  --sl: max(12px, env(safe-area-inset-left, 0px));
-  --sr: max(12px, env(safe-area-inset-right, 0px));
+  --sl: max(16px, env(safe-area-inset-left, 0px));
+  --sr: max(16px, env(safe-area-inset-right, 0px));
   --st: max(10px, env(safe-area-inset-top, 0px));
   --sb: max(10px, env(safe-area-inset-bottom, 0px));
   color-scheme: dark;
@@ -113,6 +113,12 @@ button { font: inherit; color: inherit; }
 #subtitle.sys #sub-speaker { color: var(--warn); }
 #hint { left: 50%; top: 22%; transform: translateX(-50%); padding: 8px 16px; background: var(--panel); border: 1px solid var(--line); font-size: 13px; letter-spacing: 0.05em; text-align: center; max-width: 86vw; }
 #hint b { color: var(--accent); font-family: var(--mono); }
+#banner { left: 50%; top: 30%; transform: translateX(-50%); text-align: center; white-space: nowrap; animation: banner 3.6s ease forwards; }
+#banner small { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.4em; color: var(--accent); margin-right: -0.4em; }
+#banner b { display: block; font-size: clamp(20px, 4.4vw, 38px); font-weight: 300; letter-spacing: 0.3em; margin-right: -0.3em; color: #fff; text-transform: uppercase; text-shadow: 0 0 24px rgba(95, 227, 255, 0.7), 0 0 4px #000; padding: 6px 0 8px; }
+#banner i { display: block; height: 1px; margin: 0 auto; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: banner-line 3.6s ease forwards; }
+@keyframes banner { 0% { opacity: 0; } 12% { opacity: 1; } 78% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes banner-line { 0% { width: 0; } 30% { width: 100%; } 100% { width: 100%; } }
 #toasts { right: var(--sr); top: calc(var(--st) + 210px); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: min(340px, 60vw); }
 .toast { padding: 7px 12px; background: var(--panel); border-right: 2px solid var(--accent); font-size: 12.5px; letter-spacing: 0.04em; animation: toast-in 0.25s ease-out; text-align: right; }
 .toast.good { border-color: var(--good); }

@@ -152,6 +152,9 @@ export function initInput(canvasEl) {
 
   window.addEventListener('keydown', (e) => {
     if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const onControl = !!(e.target && e.target.closest && e.target.closest('button, a'));
+    const nav = e.code === 'Tab' || e.code === 'Space' || e.code === 'Enter';
+    if (onControl && nav) return;
     if (e.code === 'Tab' || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
     if (!e.repeat) {
       setMode('kbm');
@@ -181,23 +184,23 @@ export function initInput(canvasEl) {
   });
 
   // ---- mouse ---------------------------------------------------------------
-  canvas.addEventListener('mousedown', (e) => {
-    if (input.mode === 'touch') return;
-    if (!input.capture) return;
-    if (e.button === 0) {
-      input.held.fire = true;
-      if (input.locked) {
-        input.press('click');
-      } else if (input.lockFailed) {
-        // no pointer lock here: drag to look, E to use
+  // The transparent touch layer sits above the canvas, so un-locked clicks on
+  // the view arrive there; once the pointer is locked they arrive on the canvas.
+  const onView = (e) => e.target === canvas || e.target === els.layer;
+  const active = () => input.capture || input.aimOnly;
+  window.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || !onView(e)) return;
+    if (input.mode === 'touch' || !active()) return;
+    input.held.fire = true;
+    if (input.locked) {
+      if (input.capture) input.press('click');
+    } else {
+      // drag to look straight away; ask for a pointer lock unless it was refused
+      if (input.capture) {
         mouseDrag = true;
         lastMouse = { x: e.clientX, y: e.clientY };
-      } else {
-        // start a drag as well, so the very first click already turns the view
-        mouseDrag = true;
-        lastMouse = { x: e.clientX, y: e.clientY };
-        requestLock(true);
       }
+      if (!input.lockFailed) requestLock(true);
       aimFrom(e);
     }
   });
@@ -208,23 +211,25 @@ export function initInput(canvasEl) {
     }
   });
   window.addEventListener('mousemove', (e) => {
-    if (input.mode === 'touch' && e.movementX === 0 && e.movementY === 0) return;
+    if (input.mode === 'touch') return;
     if (input.locked) {
       // guard against the occasional huge spurious delta some browsers emit
       const mx = clamp(e.movementX || 0, -150, 150);
       const my = clamp(e.movementY || 0, -150, 150);
-      input.lookX += mx;
-      input.lookY += my;
+      if (input.capture) {
+        input.lookX += mx;
+        input.lookY += my;
+      }
       input.aim.x = clamp(input.aim.x + mx / (canvas.clientWidth * 0.5), -1, 1);
       input.aim.y = clamp(input.aim.y - my / (canvas.clientHeight * 0.5), -1, 1);
       input.aim.active = true;
-    } else if (input.capture) {
-      if (mouseDrag) {
+    } else if (active()) {
+      if (mouseDrag && input.capture) {
         input.lookX += (e.clientX - lastMouse.x) * 1.4;
         input.lookY += (e.clientY - lastMouse.y) * 1.4;
         lastMouse = { x: e.clientX, y: e.clientY };
       }
-      if (e.target === canvas || e.target === els.layer) aimFrom(e);
+      if (onView(e)) aimFrom(e);
     }
   });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -233,9 +238,12 @@ export function initInput(canvasEl) {
   const layer = els.layer;
   const R = 58;
   const onDown = (e) => {
-    if (e.pointerType === 'mouse') return;
+    if (e.pointerType === 'mouse') {
+      setMode('kbm');
+      return;
+    }
     setMode('touch');
-    if (!input.capture) return;
+    if (!active()) return;
     e.preventDefault();
     const leftSide = e.clientX < window.innerWidth * 0.42;
     if (leftSide && !stick && !input.aimOnly) {
@@ -336,6 +344,9 @@ export function initInput(canvasEl) {
       }
     };
     btn.addEventListener('pointerdown', down);
+    // never keep keyboard focus, or Space and Enter would re-press the button
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', () => btn.blur());
     btn.addEventListener('pointerup', up);
     btn.addEventListener('pointercancel', up);
     btn.addEventListener('contextmenu', (e) => e.preventDefault());

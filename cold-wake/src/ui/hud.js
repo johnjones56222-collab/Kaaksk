@@ -19,7 +19,7 @@ export const hud = {
   flashV: 0,
 
   init() {
-    const ids = ['hud', 'hud-mission', 'mission-tag', 'mission-title', 'mission-text', 'mission-list', 'compass-tape', 'minimap', 'room-name', 'vital-hp', 'vital-o2', 'chips', 'crosshair', 'waypoint', 'markers', 'subtitle', 'sub-speaker', 'sub-text', 'prompt', 'prompt-key', 'prompt-text', 'hint', 'toasts', 'btn-interact', 'btn-interact-label', 'btn-flash', 'fx-fade', 'fx-flash', 'fx-damage', 'fx-frost', 'fx-helmet', 'letterbox', 'touch-buttons', 'hud-nav', 'hud-vitals', 'hud-compass', 'hud-buttons'];
+    const ids = ['hud', 'hud-mission', 'mission-tag', 'mission-title', 'mission-text', 'mission-list', 'compass-tape', 'minimap', 'room-name', 'vital-hp', 'vital-o2', 'chips', 'crosshair', 'waypoint', 'markers', 'subtitle', 'sub-speaker', 'sub-text', 'prompt', 'prompt-key', 'prompt-text', 'hint', 'toasts', 'banner', 'btn-interact', 'btn-interact-label', 'btn-flash', 'fx-fade', 'fx-flash', 'fx-damage', 'fx-frost', 'fx-helmet', 'letterbox', 'touch-buttons', 'hud-nav', 'hud-vitals', 'hud-compass', 'hud-buttons'];
     for (const id of ids) this.el[id] = document.getElementById(id);
     // compass tape: three turns of labelled ticks
     const names = ['N', '·', 'NE', '·', 'E', '·', 'SE', '·', 'S', '·', 'SW', '·', 'W', '·', 'NW', '·'];
@@ -50,6 +50,7 @@ export const hud = {
       this.el[id].style.visibility = walk || (mode === 'turret' && id === 'hud-buttons') ? '' : 'hidden';
     }
     if (!walk) {
+      this.el.banner.hidden = true;
       this.setPrompt(null);
       this.el.waypoint.hidden = true;
       for (const m of this.marks) m.hidden = true;
@@ -132,6 +133,18 @@ export const hud = {
     this.el.hint.innerHTML = html;
     this.el.hint.hidden = false;
     this.hintTimer = seconds;
+  },
+
+  // Large centred title when a new mission begins.
+  banner(tag, title) {
+    const e = this.el.banner;
+    e.firstElementChild.textContent = tag;
+    e.children[1].textContent = title;
+    e.hidden = true;
+    void e.offsetWidth;
+    e.hidden = false;
+    clearTimeout(this._bannerT);
+    this._bannerT = setTimeout(() => (e.hidden = true), 3700);
   },
 
   setRoom(name) {

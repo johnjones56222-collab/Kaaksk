@@ -94,6 +94,8 @@ export function buildShell(b, room, opts = {}) {
     beams: 4.2,
     lightRange: null,
     emergency: true,
+    upperKit: null,
+    ducts: null,
     ...opts,
   };
   const { x0, x1, z0, z1, h } = room;
@@ -235,6 +237,60 @@ export function buildShell(b, room, opts = {}) {
       }
     }
 
+    // ---- upper-wall kit for tall rooms: framed vents, light boxes, stencils ----
+    if (o.upperKit) {
+      const y0 = o.upperKit.from;
+      const top = h - (o.cove ? 0.75 : 0.45);
+      const fh = Math.min(o.upperKit.max || 2.2, top - y0);
+      if (fh > 0.9) {
+        let serial = (room.index * 7 + side.charCodeAt(0)) % 23;
+        for (const [s, e] of stretches) {
+          const len = e - s;
+          const n = Math.max(1, Math.round(len / (o.ribs || 3.4)));
+          const spots = [];
+          for (let i = 1; i < n; i++) spots.push(s + (len / n) * i);
+          if (!spots.length && len > 3.2 && (!o.ribs || (o.ribSkip && o.ribSkip(side, (s + e) / 2)))) spots.push((s + e) / 2);
+          const fw = Math.min(2.4, len / n - 0.8);
+          if (fw < 1.0) continue;
+          for (const u of spots) {
+            const yc = y0 + fh / 2;
+            const d = T + 0.035;
+            wallBox(b, 'trimDark', w, u, y0 + 0.03, d, fw, 0.06, 0.07, { fine: false });
+            wallBox(b, 'trimDark', w, u, y0 + fh - 0.03, d, fw, 0.06, 0.07, { fine: false });
+            wallBox(b, 'trimDark', w, u - fw / 2 + 0.03, yc, d, 0.06, fh, 0.07, { fine: false });
+            wallBox(b, 'trimDark', w, u + fw / 2 - 0.03, yc, d, 0.06, fh, 0.07, { fine: false });
+            const kind = serial++ % 4;
+            if (kind === 0) {
+              // louvred vent
+              wallBox(b, 'black', w, u, yc, T + 0.012, fw - 0.16, fh - 0.16, 0.02, { fine: false });
+              const slats = Math.max(4, Math.round((fh - 0.2) / 0.11));
+              for (let k = 0; k < slats; k++) wallBox(b, 'metal', w, u, y0 + 0.14 + ((fh - 0.28) / (slats - 1)) * k, T + 0.04, fw - 0.2, 0.03, 0.05, { fine: false });
+            } else if (kind === 1) {
+              // back-lit panel
+              wallBox(b, 'metalDark', w, u, yc, T + 0.012, fw - 0.16, fh - 0.16, 0.02, { fine: false });
+              wallGlow(b, G(accent, 0.75, 0, 2), w, u, yc, T + 0.026, fw - 0.5, fh - 0.5, 0.008);
+              b.light(...lightAt(w, u, yc, 1.0), accent, 0.4, 5);
+            } else if (kind === 2) {
+              // stencilled bay number
+              wallBox(b, 'metalDark', w, u, yc, T + 0.012, fw - 0.16, fh - 0.16, 0.02, { fine: false });
+              const p = wallPoint(room, side, u, 0.026);
+              b.sign(`${room.id.slice(0, 1).toUpperCase()}-${String(10 + serial).padStart(2, '0')}`, p.x, yc, p.z, Math.min(0.5, fh * 0.34), { ry: p.ry, px: 96, tint: 0xcfd8e0, i: 0.9, type: 3, weight: 800, spacing: 0.1 });
+            } else {
+              // status light ladder
+              wallBox(b, 'black', w, u, yc, T + 0.012, fw - 0.16, fh - 0.16, 0.02, { fine: false });
+              const rows = Math.max(3, Math.round((fh - 0.3) / 0.22));
+              for (let k = 0; k < rows; k++) {
+                const yy = y0 + 0.2 + ((fh - 0.4) / (rows - 1)) * k;
+                const hot = (serial + k) % 5 === 0;
+                wallGlow(b, G(hot ? 0xffb347 : accent, hot ? 2.2 : 1.3, 0, hot ? 3 : 5), w, u - fw / 2 + 0.26, yy, T + 0.026, 0.1, 0.05, 0.008);
+                wallBox(b, 'metal', w, u + 0.14, yy, T + 0.03, fw - 0.8, 0.035, 0.03, { fine: false });
+              }
+            }
+          }
+        }
+      }
+    }
+
     // ---- cove and skirting along solid stretches ----
     for (const [s, e] of stretches) {
       const len = e - s;
@@ -284,6 +340,41 @@ export function buildShell(b, room, opts = {}) {
         if (o.skylights.some((s) => x > s.x0 - 0.8 && x < s.x1 + 0.8 && z > s.z0 - 0.8 && z < s.z1 + 0.8)) continue;
         if (cl.skip && cl.skip(x, z)) continue;
         ceilingFixture(b, x, h, z, cl.color, cl.intensity, range, room.d >= room.w);
+      }
+    }
+  }
+
+  // ---- ceiling air ducts between the rows of fixtures -------------------------
+  if (o.ducts && o.ceil && o.ceilLights) {
+    const size = o.ducts.size || 0.46;
+    const alongZ = room.d >= room.w;
+    const span = alongZ ? room.w : room.d;
+    const run = (alongZ ? room.d : room.w) - 1.3;
+    const cols = Math.max(1, Math.round((span - 2) / o.ceilLights.spacing));
+    const yc = h - 0.26 - size * 0.32;
+    for (let i = 1; i < cols; i++) {
+      if (o.ducts.only != null && o.ducts.only !== i) continue;
+      const c = (alongZ ? x0 : z0) + (span / cols) * i;
+      const px = alongZ ? c : cx;
+      const pz = alongZ ? cz : c;
+      const dim = (len, wid) => (alongZ ? [wid, len] : [len, wid]);
+      const [bw, bd] = dim(run, size);
+      b.box('trim', px, yc, pz, bw, size * 0.64, bd, { tile: 1.2 });
+      const joints = Math.max(2, Math.round(run / 2.4));
+      for (let k = 0; k <= joints; k++) {
+        const t = -run / 2 + (run / joints) * k;
+        const [jw, jd] = dim(0.08, size + 0.06);
+        b.box('metalDark', px + (alongZ ? 0 : t), yc, pz + (alongZ ? t : 0), jw, size * 0.64 + 0.05, jd, { fine: false });
+        // hanger straps up to the ceiling
+        const [sw, sd] = dim(0.03, size + 0.1);
+        b.box('metalDark', px + (alongZ ? 0 : t), (yc + h) / 2 + size * 0.16, pz + (alongZ ? t : 0), sw, h - yc - size * 0.3, sd, { fine: false });
+        if (k < joints && k % 2 === 0) {
+          // downward outlet with louvres
+          const m = t + run / joints / 2;
+          const [ow, od] = dim(0.6, size * 0.7);
+          b.box('metalDark', px + (alongZ ? 0 : m), yc - size * 0.36, pz + (alongZ ? m : 0), ow, 0.06, od, { fine: false });
+          b.box('black', px + (alongZ ? 0 : m), yc - size * 0.4, pz + (alongZ ? m : 0), ow - 0.08, 0.02, od - 0.08, { fine: false });
+        }
       }
     }
   }

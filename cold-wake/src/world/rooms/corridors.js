@@ -31,8 +31,8 @@ function corridor(ctx, o = {}) {
       const x = s * (x1 - 0.25 - 0.13);
       b.box('trimDark', x, h / 2, z, 0.26, h, 0.3);
       b.box('metalDark', s * (x1 - 0.72), h - 0.46, z, 0.95, 0.2, 0.3, { rz: -s * (PI / 4) });
-      b.gbox(G(accent, 2.4, 0), s * (x1 - 0.25 - 0.265), 1.5, z, 0.012, 1.5, 0.05);
-      b.gbox(G(accent, 1.8, 0), s * (x1 - 0.79), h - 0.55, z, 0.7, 0.02, 0.05, { rz: -s * (PI / 4) });
+      b.gbox(G(accent, 1.6, 0), s * (x1 - 0.25 - 0.265), 1.5, z, 0.012, 1.5, 0.05);
+      b.gbox(G(accent, 1.4, 0), s * (x1 - 0.79), h - 0.55, z, 0.7, 0.02, 0.05, { rz: -s * (PI / 4) });
       b.light(s * (x1 - 1.0), 1.6, z, accent, 0.4, 3.2);
     }
     b.box('trimDark', 0, h - 0.12, z, (x1 - x0) - 0.5, 0.24, 0.3);
