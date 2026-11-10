@@ -35,6 +35,7 @@ dropped on any static host. `wrangler.jsonc` is set up for `npx wrangler deploy`
 | Move | W A S D (Shift to run) | Drag on the left half (push to the edge to run) |
 | Look | Mouse (click the view first) | Drag on the right half |
 | Use | E (hold for welding, valves, spraying) | USE button |
+| Turret | Move the mouse to aim, hold the button to fire | Touch and hold on a target |
 | Jump | Space | Arrow button |
 | Flashlight | F | Lamp button |
 | Datapad / map | Tab / M | Map button |
@@ -65,12 +66,21 @@ npm test           # build, then run the automated playthrough
 
 ### Tests
 
-`tests/playthrough.cjs` drives the whole story in headless Chromium through
-the game's debug hooks (`window.__game.debug`): it walks up to each object,
-checks the game focuses it, uses it, solves each puzzle, collects every
-optional item, reaches the ending and fails on any console error. It needs
-[Playwright](https://playwright.dev) (`npm i -D playwright`), which is not in
-`package.json` because the game itself has no runtime dependencies.
-`tests/shot.cjs` takes screenshots at chosen positions.
+Headless Chromium tests in `tests/`, driven through the game's debug hooks
+(`window.__game.debug`). They need [Playwright](https://playwright.dev)
+(`npm i -D playwright`), which is not in `package.json` because the game
+itself has no runtime dependencies.
+
+| Test | What it checks |
+|---|---|
+| `playthrough.cjs` | The whole story: walks up to each object, checks the game focuses it, uses it, solves each puzzle, collects every optional item, reaches the ending. Also fire damage and respawn, running out of suit oxygen, quit and continue, pausing in the turret. |
+| `controls.cjs` | Real mouse, keyboard and touch events: click to capture, drag to look, WASD, jump, flashlight, datapad keys, hold-to-work, and aiming and firing the turret by mouse and by touch. |
+| `puzzles.cjs` | Five console puzzles solved through their own buttons, including wrong answers being refused. |
+| `walk.cjs` | Steps the player controller through every door and room and along the hull catwalk, reporting anywhere it gets stuck. |
+| `save.cjs` | Save, reload, continue, and a clean new game. |
+| `touch.cjs` | Phone layout and touch controls in landscape and portrait. |
+| `tour.cjs`, `shot.cjs` | Screenshots for visual review. |
+
+Every test fails on any console error.
 
 Add `?q=low`, `?q=medium` or `?q=high` to the URL to force a graphics preset.

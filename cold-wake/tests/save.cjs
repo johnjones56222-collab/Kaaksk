@@ -72,7 +72,8 @@ const { chromium } = require('playwright');
   await page.waitForSelector('#overlay-intro:not([hidden])');
   await page.click('#intro-skip');
   await waitFor(`g.mode === 'play'`);
-  await page.waitForTimeout(600);
+  // let the game draw a few frames so the current room is known
+  await waitFor(`g.world.current !== null`, 30000).catch(() => problems.push('no current room after starting a new game'));
   const fresh = await ev(`return { step: d.step(), flags: Object.keys(d.state.flags).length, room: d.info().room }`);
   console.log('fresh ', JSON.stringify(fresh));
   if (fresh.step !== 'wake' || fresh.flags !== 0 || fresh.room !== 'cryo') problems.push(`new game not clean: ${JSON.stringify(fresh)}`);
