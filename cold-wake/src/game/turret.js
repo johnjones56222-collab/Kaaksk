@@ -11,9 +11,9 @@ import { rockGeometry } from '../world/space.js';
 import { clamp, damp } from '../core/utils.js';
 
 const WAVES = [
-  { count: 8, gap: 1.5, speed: [34, 46] },
-  { count: 12, gap: 1.1, speed: [40, 56] },
-  { count: 16, gap: 0.85, speed: [46, 66] },
+  { count: 8, gap: 1.7, speed: [28, 38] },
+  { count: 12, gap: 1.2, speed: [36, 50] },
+  { count: 16, gap: 0.95, speed: [42, 60] },
 ];
 const TOTAL = WAVES.reduce((s, w) => s + w.count, 0);
 const _ray = new THREE.Raycaster();
@@ -49,6 +49,16 @@ export class Turret {
     }
     this.beamT = 0;
     this.active = false;
+    // bracket markers that track each incoming rock on the HUD
+    this.marks = [];
+    const ui = document.getElementById('turret-ui');
+    for (let i = 0; i < 18; i++) {
+      const m = document.createElement('i');
+      m.className = 'tmark';
+      m.hidden = true;
+      ui.appendChild(m);
+      this.marks.push(m);
+    }
     this.el = {
       ui: document.getElementById('turret-ui'),
       reticle: document.getElementById('turret-reticle'),
@@ -91,7 +101,7 @@ export class Turret {
     game.mode = 'turret';
     hud.setLayout('turret');
     this.el.ui.hidden = false;
-    this._msg(input.mode === 'touch' ? 'TOUCH A TARGET TO FIRE' : 'AIM WITH THE MOUSE - HOLD TO FIRE', 3.2);
+    this._msg(input.mode === 'touch' ? 'TOUCH AND HOLD ON A TARGET TO FIRE' : 'AIM WITH THE MOUSE - HOLD TO FIRE', 4);
     say('VEGA', 'Turret is yours. Short bursts, the capacitor overheats. Do not let them reach the hull.', { now: true });
   }
 
@@ -174,6 +184,21 @@ export class Turret {
       if (miss2 < rad * rad && t < bestT) {
         bestT = t;
         best = r;
+      }
+    }
+    if (!best) {
+      // aim assist: take the rock nearest the reticle on screen. Generous on
+      // touch screens, where a fingertip hides what it is pointing at.
+      const reach = input.mode === 'touch' ? 0.2 : 0.07;
+      const aspect = game.gfx.width / game.gfx.height;
+      let bd = reach;
+      for (const r of this.rocks) {
+        if (!r.on || !r.vis) continue;
+        const dist = Math.hypot((r.sx - input.aim.x) * aspect, r.sy - input.aim.y);
+        if (dist < bd) {
+          bd = dist;
+          best = r;
+        }
       }
     }
     const end = best ? best.mesh.position.clone() : o.clone().addScaledVector(d, 700);
@@ -268,10 +293,29 @@ export class Turret {
     const cx = this.cam.x;
     const cy = this.cam.y;
     const cz = this.cam.z;
+    let mi = 0;
     for (const r of this.rocks) {
       if (!r.on) continue;
       const m = r.mesh;
       m.position.addScaledVector(r.vel, dt);
+      // where it sits on screen, for the HUD bracket and aim assist
+      _v.copy(m.position).project(cam);
+      r.sx = _v.x;
+      r.sy = _v.y;
+      r.vis = _v.z < 1 && Math.abs(_v.x) < 1.05 && Math.abs(_v.y) < 1.05;
+      if (r.vis && mi < this.marks.length) {
+        const mk = this.marks[mi++];
+        const dd = Math.hypot(m.position.x - cx, m.position.y - cy, m.position.z - cz);
+        const size = clamp((r.r * 1500) / dd, 22, 110);
+        mk.hidden = false;
+        mk.style.width = mk.style.height = `${size.toFixed(0)}px`;
+        mk.style.transform = `translate(${((_v.x * 0.5 + 0.5) * w - size / 2).toFixed(1)}px, ${((-_v.y * 0.5 + 0.5) * h - size / 2).toFixed(1)}px)`;
+        const near = dd < 170;
+        if (mk._near !== near) {
+          mk._near = near;
+          mk.classList.toggle('near', near);
+        }
+      }
       m.rotation.x += r.spin.x * dt;
       m.rotation.y += r.spin.y * dt;
       m.rotation.z += r.spin.z * dt;
@@ -279,7 +323,7 @@ export class Turret {
       if (d < 26 + r.r || m.position.z > cz + 10) {
         this._explode(r, true);
         this._kill(r);
-        this.hull -= 9 + r.r * 1.3;
+        this.hull -= 6 + r.r * 0.9;
         this.shake = 1;
         audio.sfx('impact');
         hud.flash(0.25);
@@ -287,6 +331,7 @@ export class Turret {
         if (this.hull <= 0) this._fail();
       }
     }
+    for (; mi < this.marks.length; mi++) if (!this.marks[mi].hidden) this.marks[mi].hidden = true;
     // HUD
     this.el.hull.style.transform = `scaleX(${clamp(this.hull / 100, 0, 1)})`;
     this.el.hull.style.background = this.hull < 35 ? 'var(--bad)' : this.hull < 65 ? 'var(--warn)' : 'var(--good)';
@@ -326,6 +371,7 @@ export class Turret {
     this.group.visible = false;
     for (const b of this.beams) b.visible = false;
     this.el.ui.hidden = true;
+    for (const mk of this.marks) mk.hidden = true;
     input.aimOnly = false;
     input.held.fire = false;
     const p = game.player;

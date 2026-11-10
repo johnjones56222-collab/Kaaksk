@@ -41,10 +41,24 @@ const { chromium } = require('playwright');
     if (s === target) pick = m;
   }
   if (!pick) problems.push(`breakers: no subset of ${amps} sums to ${target}`);
-  // first overload it on purpose
-  for (let i = 0; i < 6; i++) await page.click(`.breaker:nth-child(${i + 1})`);
+  // first overload it on purpose, in an order whose running total never lands on the target
+  let order = [0, 1, 2, 3, 4, 5];
+  for (let tries = 0; tries < 200; tries++) {
+    let run = 0;
+    if (!order.some((i) => (run += amps[i]) === target)) break;
+    order = order.map((v) => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map((p) => p[1]);
+  }
+  for (const i of order) await page.click(`.breaker:nth-child(${i + 1})`);
   if (!(await page.textContent('.panel-foot .status')).includes('OVERLOAD')) problems.push('breakers: overload not reported');
-  for (let i = 0; i < 6; i++) await page.click(`.breaker:nth-child(${i + 1})`);
+  // switch them off again largest-first, so the total drops below the target without touching it
+  let left = amps.reduce((a, b) => a + b, 0);
+  let offOrder = [0, 1, 2, 3, 4, 5];
+  for (let tries = 0; tries < 200; tries++) {
+    let run = left;
+    if (!offOrder.some((i) => (run -= amps[i]) === target)) break;
+    offOrder = offOrder.map((v) => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map((p) => p[1]);
+  }
+  for (const i of offOrder) await page.click(`.breaker:nth-child(${i + 1})`);
   for (let i = 0; i < 6; i++) if (pick & (1 << i)) await page.click(`.breaker:nth-child(${i + 1})`);
   await closed('cryoPower', 'breakers');
 

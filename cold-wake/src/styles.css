@@ -162,6 +162,8 @@ body.touch #hud-vitals { bottom: auto; top: calc(var(--st) + 30px); left: 50%; t
 #turret-reticle i:nth-child(3) { left: -1px; top: -26px; width: 2px; height: 16px; }
 #turret-reticle i:nth-child(4) { left: -1px; top: 10px; width: 2px; height: 16px; }
 #turret-reticle b { position: absolute; left: -19px; top: -19px; width: 38px; height: 38px; border: 1.5px solid rgba(255, 90, 72, 0.7); border-radius: 50%; }
+.tmark { left: 0; top: 0; border: 1.5px solid var(--warn); border-radius: 3px; opacity: 0.85; will-change: transform; clip-path: polygon(0 0, 30% 0, 30% 3px, 70% 3px, 70% 0, 100% 0, 100% 30%, calc(100% - 3px) 30%, calc(100% - 3px) 70%, 100% 70%, 100% 100%, 70% 100%, 70% calc(100% - 3px), 30% calc(100% - 3px), 30% 100%, 0 100%, 0 70%, 3px 70%, 3px 30%, 0 30%); }
+.tmark.near { border-color: var(--bad); border-width: 2.5px; animation: marker 0.5s linear infinite; }
 #turret-top { top: var(--st); left: 50%; transform: translateX(-50%); display: flex; gap: 18px; align-items: center; padding: 8px 16px; background: var(--panel); border: 1px solid rgba(255, 90, 72, 0.5); max-width: 96vw; }
 .tbar { display: flex; flex-direction: column; gap: 3px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; color: var(--dim); }
 .tbar b { display: block; width: min(170px, 24vw); height: 8px; background: rgba(255, 255, 255, 0.1); }

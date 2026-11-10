@@ -47,12 +47,21 @@ async function session(browser, opts) {
     const locked = await ev('return g.input.locked');
     console.log('pointer lock after clicking the view:', locked);
     if (locked) {
-      // 2. locked mouse motion turns the view
-      const y0 = await ev('return g.player.yaw');
-      for (let i = 1; i <= 10; i++) await page.mouse.move(450 + i * 12, 250);
-      await frames(4);
-      const y1 = await ev('return g.player.yaw');
-      if (Math.abs(y1 - y0) < 0.05) note(`locked mouse-look did not turn the view (${y0.toFixed(3)} -> ${y1.toFixed(3)})`);
+      // 2. locked mouse motion feeds the look controls. (Headless Chromium
+      // reports +x then -x for scripted moves while locked, so send well-formed
+      // locked motion events and read what the game accumulated.)
+      const { look, yawA } = await page.evaluate(() => {
+        const g = window.__game;
+        const c = document.getElementById('game');
+        const before = g.input.lookX;
+        const yawA = g.player.yaw;
+        for (let i = 0; i < 10; i++) c.dispatchEvent(new MouseEvent('mousemove', { movementX: 14, movementY: 3, bubbles: true }));
+        return { look: g.input.lookX - before, yawA };
+      });
+      if (look !== 140) note(`locked mouse motion accumulated ${look}px of look, expected 140`);
+      await frames(3);
+      const yawB = await ev('return g.player.yaw');
+      if (!(yawB < yawA - 0.2)) note(`locked mouse-look did not turn the view right (${yawA.toFixed(3)} -> ${yawB.toFixed(3)})`);
       await page.evaluate(() => document.exitPointerLock());
       await waitFor(`g.mode === 'paused'`, 10000).catch(() => note('losing the pointer lock did not pause'));
       await page.click('#overlay-pause .btn.primary');

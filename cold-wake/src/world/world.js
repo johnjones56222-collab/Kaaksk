@@ -138,7 +138,7 @@ export class World {
         buildFn(db);
         deferred.push(() => {
           pivot.updateMatrixWorld(true);
-          pivot.add(db.finalize({ lights: world.roomLights[def.index], bakeMatrix: pivot.matrixWorld.clone(), name: o.name || 'dyn', ambient: rec.ambient }));
+          pivot.add(db.finalize({ lights: world.roomLights[def.index], bakeMatrix: pivot.matrixWorld.clone(), name: o.name || 'dyn', ambient: rec.ambient, sun: rec.sun }));
         });
         return pivot;
       },
@@ -172,10 +172,14 @@ export class World {
     ctx.setAmbient = (a) => {
       rec.ambient = a;
     };
+    rec.sun = null;
+    ctx.setSun = (s) => {
+      rec.sun = s;
+    };
     if (decorate) decorate(ctx);
     else ctx.shell({});
     this.roomLights[def.index] = b.lights;
-    const group = b.finalize({ name: def.id, ambient: rec.ambient });
+    const group = b.finalize({ name: def.id, ambient: rec.ambient, sun: rec.sun });
     for (const fn of deferred) fn();
     for (const [mat, parts] of screenParts) {
       const merged = mergeGeometries(parts, false);
@@ -349,7 +353,7 @@ export class World {
     const scene = this.scene;
     scene.environmentIntensity = damp(scene.environmentIntensity, exterior ? 0.12 : 0.07 + 0.3 * curPower, 4, dt);
     this.hemi.intensity = damp(this.hemi.intensity, exterior ? 0.1 : 0.07 + 0.2 * curPower, 4, dt);
-    this.sun.intensity = damp(this.sun.intensity, exterior ? 3.4 : 0, 6, dt);
+    this.sun.intensity = damp(this.sun.intensity, exterior ? 1.5 : 0, 6, dt);
     scene.fog.density = damp(scene.fog.density, exterior ? 0.0006 : 0.011, 4, dt);
 
     this._updatePool(dt, camPos, cur, curPower);

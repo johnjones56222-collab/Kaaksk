@@ -20,7 +20,7 @@ export const ROOMS = [
   { id: 'airlock', name: 'Airlock', x0: 12, x1: 18, z0: 37, z1: 43, h: 3.4, color: 0xff7a4a },
   { id: 'bridge', name: 'Bridge', x0: -8, x1: 8, z0: -50, z1: -36, h: 5, color: 0x58b8ff },
   // The dorsal hull, reached through the airlock. Lives far from the deck plan.
-  { id: 'hull', name: 'Dorsal Hull', x0: 270, x1: 330, z0: -80, z1: 30, h: 0, color: 0xffffff, exterior: true },
+  { id: 'hull', name: 'Dorsal Hull', x0: 270, x1: 330, z0: -125, z1: 30, h: 0, color: 0xffffff, exterior: true },
 ];
 
 export const R = {};

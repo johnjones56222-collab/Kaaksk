@@ -434,6 +434,7 @@ export class Builder {
     name = 'room',
     bakeMatrix = null,
     split = null,
+    sun = null,
   } = {}) {
     const group = new THREE.Group();
     group.name = name;
@@ -476,7 +477,7 @@ export class Builder {
           }
         }
       } else {
-        baked = bakeLight(bp, bn, bk.count, lights, ambient, ambientE);
+        baked = bakeLight(bp, bn, bk.count, lights, ambient, ambientE, sun);
       }
       geom.setAttribute('bake', new THREE.BufferAttribute(baked.bake, 3));
       geom.setAttribute('bakeE', new THREE.BufferAttribute(baked.bakeE, 3));
@@ -520,7 +521,8 @@ export class Builder {
 
 // Per-vertex light accumulation. Soft wrap lighting with a smooth range
 // window; emergency fixtures accumulate into their own channel.
-export function bakeLight(pos, nrm, count, lights, ambient, ambientE) {
+// sun: optional { x, y, z, r, g, b } - a fixed directional light baked in as well.
+export function bakeLight(pos, nrm, count, lights, ambient, ambientE, sun = null) {
   const bake = new Float32Array(count * 3);
   const bakeE = new Float32Array(count * 3);
   const L = lights.map((l) => ({ ...l, r2: l.range * l.range }));
@@ -536,6 +538,14 @@ export function bakeLight(pos, nrm, count, lights, ambient, ambientE) {
     let r = ambient[0] * hemi;
     let g = ambient[1] * hemi;
     let b = ambient[2] * hemi;
+    if (sun) {
+      const s = nx * sun.x + ny * sun.y + nz * sun.z;
+      if (s > 0) {
+        r += sun.r * s;
+        g += sun.g * s;
+        b += sun.b * s;
+      }
+    }
     let er = ambientE[0] * hemi;
     let eg = ambientE[1] * hemi;
     let eb = ambientE[2] * hemi;

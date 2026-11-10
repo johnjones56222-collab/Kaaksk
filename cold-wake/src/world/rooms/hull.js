@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { G } from '../../engine/builder.js';
 import { HULL_ORIGIN } from '../layout.js';
+import { SUN_DIR } from '../space.js';
 import { railing, consoleDesk } from '../props.js';
 import { FX } from '../../engine/particles.js';
 import { has } from '../../core/state.js';
@@ -12,7 +13,9 @@ import { PI } from './common.js';
 export function buildHull(ctx) {
   const { b } = ctx;
   const X = HULL_ORIGIN.x;
-  ctx.setAmbient([0.035, 0.04, 0.055]);
+  ctx.setAmbient([0.05, 0.058, 0.08]);
+  // most of the sunlight is baked in, so the hull can never render unlit
+  ctx.setSun({ x: SUN_DIR.x, y: SUN_DIR.y, z: SUN_DIR.z, r: 1.15, g: 1.06, b: 0.92 });
   b.segLen = 6;
   // ---- hull body ----
   b.box('hull', X, -0.6, -25, 44, 1.2, 170, { uv: 'world' });
@@ -168,7 +171,16 @@ export function buildHull(ctx) {
     b.cyl('trimDark', X + s * 0.6, 1.9, -72.6, 0.28, 0.6, { axis: 'z', seg: 10 });
     b.gcyl(G(0xff7a4a, 2.4, 2, 2), X + s * 0.6, 1.9, -72.92, 0.14, 0.02, { axis: 'z', seg: 10 });
   }
-  ctx.anchor('turretCam', X, 4.2, -66);
+  // the working turret sits on top of the bridge tower with a clear field of fire
+  b.cyl('hullDark', X, 20.8, -101.5, 2.4, 1.2, { seg: 20, top: 0.8 });
+  b.sph('hull', X, 21.6, -101.5, 1.6, { seg: 18, sy: 0.75 });
+  for (const s of [-1, 1]) {
+    b.cyl('metalDark', X + s * 0.6, 21.9, -104.4, 0.2, 4.4, { axis: 'z', seg: 10 });
+    b.cyl('trimDark', X + s * 0.6, 21.9, -106.3, 0.28, 0.6, { axis: 'z', seg: 10 });
+    b.gcyl(G(0xff7a4a, 2.4, 2, 2), X + s * 0.6, 21.9, -106.62, 0.14, 0.02, { axis: 'z', seg: 10 });
+  }
+  b.box('hullDark', X, 20.35, -106.5, 9, 0.3, 5, { uv: 'world' });
+  ctx.anchor('turretCam', X, 23.5, -99.6);
 
   // ---- distant superstructure: bridge tower forward, engines aft ----
   b.segLen = 8;
@@ -177,8 +189,8 @@ export function buildHull(ctx) {
   b.box('hullDark', X, 19, -101, 10, 2.4, 8, { uv: 'world' });
   for (let i = 0; i < 9; i++) b.gbox(G(0xffe2b0, 2.2, 2), X - 7 + i * 1.75, 15.6, -92.95, 1.2, 0.5, 0.06);
   for (let i = 0; i < 14; i++) if (i % 4 !== 1) b.gbox(G(0xffe2b0, 1.6, 2), X - 13 + i * 2, 7.5, -86.95, 1.1, 0.45, 0.06);
-  b.cyl('metalDark', X + 4, 26, -101, 0.12, 12, { seg: 6 });
-  b.gsph(G(0xff3020, 6, 2, 3), X + 4, 32.2, -101, 0.25);
+  b.cyl('metalDark', X + 8, 26, -95, 0.12, 12, { seg: 6 });
+  b.gsph(G(0xff3020, 6, 2, 3), X + 8, 32.2, -95, 0.25);
   b.box('hullDark', X, 7, 52, 40, 16, 16, { uv: 'world' });
   for (const s of [-1, 0, 1]) {
     b.cyl('metalDark', X + s * 12, 7, 62, 5, 6, { axis: 'z', seg: 20, top: 0.7 });
