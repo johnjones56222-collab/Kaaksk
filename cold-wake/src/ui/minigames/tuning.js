@@ -435,5 +435,6 @@ export function align(api) {
   api.body.append(canvas, readout, meter);
   api.solve = () => {
     lock = 1;
+    api.win();
   };
 }

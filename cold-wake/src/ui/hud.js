@@ -156,8 +156,13 @@ export const hud = {
 
   frost(v, seconds = 2.4) {
     const e = this.el['fx-frost'];
+    clearTimeout(this._frostT);
+    if (v > 0) e.hidden = false;
     e.style.transitionDuration = `${seconds}s`;
+    void e.offsetWidth;
     e.style.opacity = String(v);
+    // take the blurred layer out of the page once it has faded
+    if (v <= 0) this._frostT = setTimeout(() => (e.hidden = true), seconds * 1000 + 200);
   },
 
   helmet(on) {

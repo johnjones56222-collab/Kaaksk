@@ -30,7 +30,7 @@ export function buildCryo(ctx) {
       if (i === 2) {
         cryoPod(bb, ctx, { occupied: false, open: true, label: '07' });
         ctx.anchor('spawn', 0, 0, 0.06);
-        ctx.anchor('podLatch', 0, 1.25, 0.42);
+        ctx.anchor('podLatch', 0.12, 1.42, 0.4);
         const canopy = ctx.dyn(0, 0, 0, 0, (db) => {
           db.cyl('glassFrost', 0, 1.36, -0.02, 0.5, 2.1, { seg: 14, open: true });
           db.box('trimDark', 0, 0.36, 0.49, 0.6, 0.07, 0.05, { fine: false });
@@ -38,8 +38,8 @@ export function buildCryo(ctx) {
           db.box('metal', 0.2, 1.25, 0.5, 0.05, 0.22, 0.05, { fine: false });
           db.gbox(G(0x6dffb0, 2.4, 2, 2), 0.2, 1.42, 0.51, 0.04, 0.04, 0.02);
         });
+        // blocks the way out, but not the player's reach for the latch
         const col = bb.solid(-0.5, 0.34, 0.5, 0.5);
-        col.wall = true;
         ctx.tick((dt) => {
           if (has('podOpen') && canopy.visible) {
             canopy.position.y += dt * 1.5;

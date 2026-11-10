@@ -57,6 +57,13 @@ export function clearDialogue() {
 
 export const dialogueBusy = () => !!current || queue.length > 0;
 
+// Drop lines that are waiting and let the one on screen finish quickly, so
+// speech never lags far behind what the player is doing.
+export function catchUp() {
+  queue.length = 0;
+  if (current) timer = Math.min(timer, 0.9);
+}
+
 export function updateDialogue(dt) {
   if (!current) {
     if (!queue.length) return;

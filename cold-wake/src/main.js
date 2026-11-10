@@ -11,12 +11,13 @@ import { Space, SUN_DIR } from './world/space.js';
 import { ROOM_BUILDERS } from './world/rooms/index.js';
 import { ROOMS, R, roomAt, HULL_ORIGIN } from './world/layout.js';
 import { Player } from './game/player.js';
+import { Drone } from './world/drone.js';
 import { Interact } from './game/interact.js';
 import { Turret } from './game/turret.js';
 import { game } from './game/ctx.js';
 import { missions } from './game/missions.js';
-import { setupContent, applyRules, updateContent } from './game/content.js';
-import { updateDialogue, clearDialogue, say } from './game/dialogue.js';
+import { setupContent, applyRules, updateContent, onRoomEnter } from './game/content.js';
+import { updateDialogue, clearDialogue, say, dialogueBusy } from './game/dialogue.js';
 import { runEnding } from './game/ending.js';
 import { hud } from './ui/hud.js';
 import { menus } from './ui/menus.js';
@@ -65,7 +66,7 @@ async function boot() {
   const world = new World(gfx, lib);
   await world.build(ROOM_BUILDERS, (k, name) => progress(0.24 + k * 0.7, `Fitting out: ${name}`));
   const player = new Player(world, gfx);
-  Object.assign(game, { gfx, world, space, player, hud, audio, missions, menus });
+  Object.assign(game, { gfx, world, space, player, hud, audio, missions, menus, input });
   game.interact = new Interact();
   game.o2Max = 240;
   game.o2 = game.o2Max;
@@ -73,10 +74,12 @@ async function boot() {
   game.fx = { spray: 0, weld: 0 };
   game.cinematic = null;
   game.prevMode = 'play';
+  game.dialogueBusy = dialogueBusy;
   hud.init();
   initInput(canvas);
   setupContent();
   game.turret = new Turret();
+  game.drone = new Drone(gfx.scene);
   world.sun.position.copy(SUN_DIR);
   defineGameApi();
   wireEvents();
@@ -95,6 +98,7 @@ async function boot() {
     const raw = now - last;
     last = now;
     const dt = clamp(raw / 1000, 0.0005, 0.05);
+    game.frame = (game.frame || 0) + 1;
     try {
       if (game.mode === 'paused' || game.mode === 'ended' || game.mode === 'intro') {
         // keep the last frame; redraw occasionally so resizes still show
@@ -178,6 +182,16 @@ function step(dt) {
   } else if (mode === 'turret' && input.pressed('pause')) {
     game.pause('help');
   }
+  const core = world.refs.vegaCore;
+  game.drone.update(
+    dt,
+    world.time,
+    player,
+    world,
+    has('vegaOnline') && (mode === 'play' || mode === 'minigame' || mode === 'reader') && !player.frozen,
+    hud._wpWorld,
+    core ? core.talk : 0
+  );
   if (mode === 'minigame') tickMinigame(dt);
   updateContent(dt);
   updateDialogue(dt);
@@ -196,6 +210,7 @@ function wireEvents() {
     hud.setRoom(room.name);
     if (room.id === 'hub' && has('cryoPower')) setFlag('reachedHub');
     if (room.id === 'bridge' && has('stormWarning')) setFlag('reachedBridge');
+    if (game.mode === 'play') onRoomEnter(room);
   });
   bus.on('door', (door, what) => {
     if (game.mode === 'menu') return;
@@ -220,6 +235,9 @@ function wireEvents() {
   });
   bus.on('lock', (locked) => {
     if (!locked && game.mode === 'play' && input.mode === 'kbm' && !input.lockFailed) game.pause('mission');
+  });
+  bus.on('lockfailed', () => {
+    if (game.mode === 'play') hud.hint('<b>Hold the mouse button and drag</b> to look around.', 7);
   });
   window.addEventListener('resize', () => gfx.resize());
   window.addEventListener('orientationchange', () => setTimeout(() => gfx.resize(), 250));
@@ -257,6 +275,8 @@ function defineGameApi() {
 
   game.toTitle = () => {
     game.mode = 'menu';
+    clearInput();
+    releaseLock();
     hud.show(false);
     hud.helmet(false);
     hud.letterbox(false);
@@ -267,6 +287,7 @@ function defineGameApi() {
     game.space.setJump(0);
     gfx.bloomBoost = 0;
     gfx.applyFov(0);
+    if (game.drone) game.drone.group.visible = false;
     menus.hideEnd();
     menus.closePause();
     menus.showTitle();
@@ -506,21 +527,30 @@ function defineGameApi() {
       const z = a ? a.z : room.cz;
       player.place(x, z, yawDeg != null ? (yawDeg * Math.PI) / 180 : player.yaw, 0);
     },
-    // stand next to an anchor, facing it
-    approach(name, dist = 1.3) {
+    // stand next to an anchor, facing it, somewhere clear with a line of sight
+    approach(name, dist = 1.35) {
       const a = A[name];
       if (!a) return false;
       const cur = roomAt(a.x, a.z);
-      // step back towards the room centre so we do not land inside a prop
-      let dx = (cur ? cur.cx : a.x) - a.x;
-      let dz = (cur ? cur.cz : a.z + 1) - a.z;
-      const len = Math.hypot(dx, dz) || 1;
-      dx /= len;
-      dz /= len;
-      const x = a.x + dx * dist;
-      const z = a.z + dz * dist;
-      const yaw = Math.atan2(-(a.x - x), -(a.z - z));
-      player.place(x, z, yaw, Math.atan2(a.y - player.eye, dist));
+      const toC = Math.atan2((cur ? cur.cz : a.z + 1) - a.z, (cur ? cur.cx : a.x) - a.x);
+      let best = null;
+      for (const d of [dist, dist + 0.5, dist - 0.4, dist + 1.1]) {
+        for (let i = 0; i < 16 && !best; i++) {
+          const ang = toC + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * (Math.PI / 8);
+          const x = a.x + Math.cos(ang) * d;
+          const z = a.z + Math.sin(ang) * d;
+          const r = 0.4;
+          if (roomAt(x, z) !== cur) continue;
+          if (world.colliders.some((c) => c.on && x > c.x0 - r && x < c.x1 + r && z > c.z0 - r && z < c.z1 + r)) continue;
+          if (world.blocked(x, z, a.x, a.z)) continue;
+          best = { x, z, d };
+        }
+        if (best) break;
+      }
+      if (!best) best = { x: a.x, z: a.z + dist, d: dist };
+      const yaw = Math.atan2(-(a.x - best.x), -(a.z - best.z));
+      const eye = player.eye;
+      player.place(best.x, best.z, yaw, Math.atan2(a.y - eye, best.d));
       return true;
     },
     use(id) {

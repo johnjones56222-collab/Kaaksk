@@ -1,0 +1,6 @@
+{
+  // Static site: `npx wrangler deploy` serves public/index.html.
+  "name": "cold-wake",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./public" }
+}

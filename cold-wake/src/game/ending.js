@@ -7,6 +7,7 @@ import { sayAll, clearDialogue } from './dialogue.js';
 import { setFlag, state, saveGame } from '../core/state.js';
 import { menus } from '../ui/menus.js';
 import { smooth, damp, angleDelta } from '../core/utils.js';
+import { releaseLock, clearInput } from '../engine/input.js';
 
 export function runEnding() {
   const p = game.player;
@@ -52,6 +53,9 @@ export function runEnding() {
         saveGame();
         game.cinematic = null;
         game.mode = 'ended';
+        // hand the mouse back so the summary buttons can be clicked
+        clearInput();
+        releaseLock();
         hud.show(false);
         menus.showEnd();
         hud.fade(0.55, 0.4);

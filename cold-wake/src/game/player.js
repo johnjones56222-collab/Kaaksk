@@ -36,8 +36,9 @@ export class Player {
     this.lean = 0;
     this.boost = 0;
 
-    this.lamp = new THREE.SpotLight(0xdcecff, 0, 26, 0.52, 0.55, 1.4);
-    this.lamp.position.set(0.22, -0.18, 0.1);
+    // the lamp sits a little behind the eye so close surfaces do not blow out
+    this.lamp = new THREE.SpotLight(0xdcecff, 0, 34, 0.5, 0.6, 1.5);
+    this.lamp.position.set(0.2, -0.12, 1.3);
     this.lampTarget = new THREE.Object3D();
     this.lampTarget.position.set(0, -0.05, -6);
     this.camera.add(this.lamp);
@@ -146,7 +147,7 @@ export class Player {
     this.shake = Math.max(0, this.shake - dt * 1.8);
     // flashlight
     this.lampLevel = damp(this.lampLevel, this.lampOn ? 1 : 0, 14, dt);
-    this.lamp.intensity = this.lampLevel * 85;
+    this.lamp.intensity = this.lampLevel * 22;
     this.syncCamera(dt);
     state.pos = { x: this.x, z: this.z, yaw: this.yaw };
     void world;

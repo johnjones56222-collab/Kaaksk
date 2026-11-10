@@ -298,7 +298,7 @@ export function buildShell(b, room, opts = {}) {
     ].slice(0, room.w * room.d > 120 ? 4 : 2);
     for (const [ex, ez] of pts) emergencyBeacon(b, ex, h - 0.02, ez, Math.max(9.5, h * 1.7));
     // faint always-on glow so the room is never pitch black
-    b.light(cx, Math.min(h, 3.6) - 0.5, cz, 0xff2a1a, 0.5, Math.max(room.w, room.d) * 0.9, { emerg: true });
+    b.light(cx, Math.min(h, 3.6) - 0.5, cz, 0xff2a1a, 0.1, Math.max(room.w, room.d) * 0.9, { emerg: true });
   }
 
   return info;
@@ -334,5 +334,5 @@ export function emergencyBeacon(b, x, y, z, range = 9.5) {
   b.cyl('metalDark', x, y - 0.04, z, 0.13, 0.08, { seg: 10 });
   b.gcyl(G(0xff2a12, 5, 1), x, y - 0.14, z, 0.085, 0.13, { seg: 10 });
   b.cyl('metalDark', x, y - 0.215, z, 0.095, 0.02, { seg: 10 });
-  b.light(x, y - 0.5, z, 0xff2a12, 1.5, range, { emerg: true });
+  b.light(x, y - 0.5, z, 0xff2a12, 0.5, range, { emerg: true });
 }

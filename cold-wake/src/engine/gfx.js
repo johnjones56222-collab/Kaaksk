@@ -32,6 +32,7 @@ export class Gfx {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
     renderer.autoClear = false;
+    renderer.info.autoReset = false;
     renderer.setClearColor(0x000000, 1);
     setAnisotropy(Math.min(IS_MOBILE ? 4 : 8, renderer.capabilities.getMaxAnisotropy()));
 
@@ -165,6 +166,7 @@ export class Gfx {
   render() {
     if (this.contextLost) return;
     const r = this.renderer;
+    r.info.reset();
     r.toneMappingExposure = 1.05 * settings.brightness;
     this.spaceCamera.quaternion.copy(this.camera.getWorldQuaternion(_q));
     if (this.composer) {

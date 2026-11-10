@@ -4,7 +4,7 @@
 import { state, has, count, saveGame } from '../core/state.js';
 import { game } from './ctx.js';
 import { hud } from '../ui/hud.js';
-import { say, sayAll } from './dialogue.js';
+import { say, sayAll, catchUp } from './dialogue.js';
 import { audio } from '../engine/audio.js';
 import { R } from '../world/layout.js';
 
@@ -253,7 +253,10 @@ export const missions = {
       } else {
         audio.sfx('objective');
       }
-      if (next && next.start && !next.done()) next.start();
+      if (next && next.start && !next.done()) {
+        catchUp();
+        next.start();
+      }
     }
     if (advanced) {
       hud.pulseMission();

@@ -501,6 +501,29 @@ export function setupContent() {
   });
 }
 
+// VEGA's first impressions as the player reaches each area with her online.
+const ROOM_LINES = {
+  hub: 'The hub. On a normal day you cannot hear yourself think in here.',
+  quarters: 'Crew quarters. Try not to judge the state of the galley.',
+  lab: "Lindqvist's lab. That fragment in the middle is what started all this.",
+  engineering: 'Engineering. She looks wrong without the glow, does she not?',
+  hydro: 'The garden. A fifth of our oxygen, and most of our morale.',
+  medbay: 'Careful. The suppression system is down and the air in there is foul.',
+  cargo: 'Cargo bay. The shield at the stern is the only thing between you and vacuum.',
+  airlock: 'Airlock two. Suits on the bow wall, controls on the stern wall.',
+  bridge: 'The bridge. It has been too quiet up here.',
+  cryo: 'They are all still breathing. I check every four seconds.',
+  aicore: 'This is me, more or less. Please do not touch the racks.',
+};
+
+export function onRoomEnter(room) {
+  if (!has('vegaOnline') || has(`seen_${room.id}`) || !ROOM_LINES[room.id]) return;
+  // skip while story lines are playing so she never talks over herself
+  if (game.dialogueBusy && game.dialogueBusy()) return;
+  setFlag(`seen_${room.id}`);
+  say(V, ROOM_LINES[room.id]);
+}
+
 // World state that follows from story flags. Safe to call at any time.
 export function applyRules(instant = false) {
   const { world } = game;

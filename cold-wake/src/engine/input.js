@@ -75,14 +75,36 @@ function updateKeys() {
   input.held.alt = keys.has('Space');
 }
 
-export function requestLock() {
+// byGesture: true when called straight from a click on the view. Only a lock
+// that fails then means the browser really will not grant one (some embedded
+// frames); a refusal without a gesture just means "click first".
+let gestureAttempt = false;
+export function requestLock(byGesture = false) {
   if (!canvas || input.mode === 'touch' || input.lockFailed) return;
   if (document.pointerLockElement === canvas) return;
-  try {
-    const p = canvas.requestPointerLock?.();
-    if (p && typeof p.catch === 'function') p.catch(() => {});
-  } catch {
+  if (!canvas.requestPointerLock) {
     input.lockFailed = true;
+    return;
+  }
+  gestureAttempt = byGesture;
+  try {
+    const p = canvas.requestPointerLock();
+    if (p && typeof p.catch === 'function') {
+      p.catch(() => {
+        if (byGesture) lockRefused();
+      });
+    }
+  } catch {
+    if (byGesture) lockRefused();
+  }
+}
+
+let refusals = 0;
+function lockRefused() {
+  // two refused clicks in a row: fall back to drag-to-look
+  if (++refusals >= 2 && !input.locked) {
+    input.lockFailed = true;
+    bus.emit('lockfailed');
   }
 }
 
@@ -150,12 +172,12 @@ export function initInput(canvasEl) {
 
   document.addEventListener('pointerlockchange', () => {
     input.locked = document.pointerLockElement === canvas;
+    if (input.locked) refusals = 0;
     bus.emit('lock', input.locked);
   });
   document.addEventListener('pointerlockerror', () => {
-    input.lockFailed = true;
     input.locked = false;
-    bus.emit('lockfailed');
+    if (gestureAttempt) lockRefused();
   });
 
   // ---- mouse ---------------------------------------------------------------
@@ -167,11 +189,14 @@ export function initInput(canvasEl) {
       if (input.locked) {
         input.press('click');
       } else if (input.lockFailed) {
+        // no pointer lock here: drag to look, E to use
         mouseDrag = true;
         lastMouse = { x: e.clientX, y: e.clientY };
-        input.press('click');
       } else {
-        requestLock();
+        // start a drag as well, so the very first click already turns the view
+        mouseDrag = true;
+        lastMouse = { x: e.clientX, y: e.clientY };
+        requestLock(true);
       }
       aimFrom(e);
     }

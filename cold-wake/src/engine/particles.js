@@ -204,7 +204,7 @@ export const FX = {
       x: e.x + sr() * radius * s, y: e.y + R() * 0.1, z: e.z + sr() * radius * s,
       vx: sr() * 0.2, vy: (1.1 + R() * 1.2) * (0.5 + 0.5 * s), vz: sr() * 0.2,
       life: 0.5 + R() * 0.5, size: (0.5 + R() * 0.3) * s, size1: 0.08,
-      r: 3.4, g: 1.3 + R() * 0.9, b: 0.25, a: 0.75, frame: 3, add: true, drag: 0.4,
+      r: 2.4, g: 0.75 + R() * 0.5, b: 0.1, a: 0.7, frame: 3, add: true, drag: 0.4,
     });
     if (R() < 0.3) {
       P.spawn({

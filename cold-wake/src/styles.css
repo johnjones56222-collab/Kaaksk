@@ -165,7 +165,7 @@ body.touch #hud-vitals { bottom: auto; top: calc(var(--st) + 30px); left: 50%; t
 #turret-msg { left: 50%; top: 24%; transform: translateX(-50%); font-size: 22px; letter-spacing: 0.3em; color: #fff; text-shadow: 0 0 14px rgba(255, 90, 72, 0.9); text-align: center; white-space: nowrap; }
 
 /* ---- overlays ---- */
-.overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--st) var(--sr) var(--sb) var(--sl); background: rgba(1, 5, 9, 0.62); overflow: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.overlay { position: absolute; inset: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: var(--st) var(--sr) var(--sb) var(--sl); background: rgba(1, 5, 9, 0.62); overflow: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
 .panel { width: min(680px, 100%); max-height: 100%; display: flex; flex-direction: column; background: var(--panel-solid); border: 1px solid var(--line); box-shadow: 0 0 60px rgba(0, 40, 60, 0.6), inset 0 0 0 1px rgba(95, 227, 255, 0.05); clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
 .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 18px 10px; border-bottom: 1px solid var(--line-soft); }
 .panel-head h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; }
@@ -201,7 +201,9 @@ body.touch #hud-vitals { bottom: auto; top: calc(var(--st) + 30px); left: 50%; t
 
 /* title screen */
 #overlay-menu { background: linear-gradient(90deg, rgba(1, 5, 9, 0.88) 0%, rgba(1, 5, 9, 0.5) 46%, rgba(1, 5, 9, 0) 78%); place-items: center start; }
-.menu { width: min(430px, 100%); padding: 6px clamp(4px, 4vw, 44px); display: flex; flex-direction: column; gap: 10px; }
+.menu { width: min(430px, 100%); max-height: 100%; overflow-y: auto; scrollbar-width: none; padding: 6px clamp(4px, 4vw, 44px); display: flex; flex-direction: column; gap: 10px; }
+.menu::-webkit-scrollbar { display: none; }
+.menu > * { flex: 0 0 auto; }
 .menu h1 { margin: 0; font-size: clamp(38px, 8.5vw, 76px); font-weight: 300; letter-spacing: 0.26em; line-height: 1; color: #fff; text-shadow: 0 0 34px rgba(95, 227, 255, 0.55); white-space: nowrap; }
 .menu .sub { font-family: var(--mono); font-size: 11px; letter-spacing: 0.3em; color: var(--accent); margin: 2px 0 14px; text-transform: uppercase; }
 .menu .blurb { font-size: 14px; line-height: 1.55; color: var(--fg); margin: 0 0 12px; max-width: 38ch; }
@@ -264,7 +266,7 @@ body.touch #hud-vitals { bottom: auto; top: calc(var(--st) + 30px); left: 50%; t
 .reader { width: min(600px, 100%); }
 .end { width: min(640px, 100%); text-align: center; }
 .end h1 { font-weight: 300; letter-spacing: 0.3em; font-size: clamp(24px, 6vw, 42px); margin: 6px 0 4px; color: #fff; }
-.end .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 16px 0; }
+.end .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px; margin: 14px 0; }
 .end .stat { border: 1px solid var(--line-soft); padding: 10px 8px; }
 .end .stat b { display: block; font-family: var(--mono); font-size: 20px; color: var(--accent); font-weight: 400; }
 .end .stat span { font-size: 10px; letter-spacing: 0.18em; color: var(--dim); text-transform: uppercase; }
@@ -380,6 +382,7 @@ body.touch #hud-vitals { bottom: auto; top: calc(var(--st) + 30px); left: 50%; t
 }
 @media (max-width: 560px) {
   #hud-mission { max-width: 58vw; }
+  body.touch #hud-vitals { top: auto; bottom: calc(var(--sb) + 4px); left: var(--sl); transform: none; }
   #hud-compass { display: none; }
   #minimap { width: 88px; height: 88px; }
   #hud-buttons { top: calc(var(--st) + 112px); }
