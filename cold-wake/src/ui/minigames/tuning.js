@@ -217,12 +217,16 @@ export function wave(api) {
   const W = Math.round(Math.min(560, window.innerWidth - 80));
   const H = Math.round(Math.min(190, window.innerHeight * 0.3));
   const { canvas, ctx } = fitCanvas(W, H);
-  const target = { amp: 0.45 + Math.random() * 0.5, freq: 1.5 + Math.random() * 3.5, phase: Math.random() * TAU };
+  // The sliders move in clear steps and the carrier sits exactly on one, so
+  // the match is findable by eye on a phone as well as with a mouse.
+  const PH = TAU / 24;
+  const pick = (n) => Math.floor(Math.random() * n);
+  const target = { amp: 0.5 + pick(9) * 0.05, freq: 1.5 + pick(15) * 0.25, phase: (2 + pick(21)) * PH };
   const cur = { amp: 0.3, freq: 1, phase: 0 };
   const defs = [
-    ['AMPLITUDE', 'amp', 0.2, 1, 0.01],
-    ['FREQUENCY', 'freq', 1, 6, 0.02],
-    ['PHASE', 'phase', 0, TAU, 0.02],
+    ['AMPLITUDE', 'amp', 0.2, 1, 0.05],
+    ['FREQUENCY', 'freq', 1, 6, 0.25],
+    ['PHASE', 'phase', 0, TAU - PH, PH],
   ];
   const sl = el('div', 'sliders');
   const inputs = {};

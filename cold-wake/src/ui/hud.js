@@ -34,6 +34,9 @@ export const hud = {
       this.marks.push(m);
     }
     this.ring = $('#crosshair .ring');
+    this.hpBar = this.el['vital-hp'].querySelector('i');
+    this.o2Bar = this.el['vital-o2'].querySelector('i');
+    this.o2Text = this.el['vital-o2'].querySelector('em');
   },
 
   show(on) {
@@ -199,16 +202,26 @@ export const hud = {
     el['compass-tape'].style.transform = `translateX(${-(720 + (deg / 22.5) * 45 + 22.5)}px)`;
     // vitals
     const hp = clamp(p.health / 100, 0, 1);
-    const hpBar = el['vital-hp'].querySelector('i');
-    hpBar.style.transform = `scaleX(${hp})`;
+    if (hp !== this._hp) {
+      this._hp = hp;
+      this.hpBar.style.transform = `scaleX(${hp})`;
+    }
     el['vital-hp'].classList.toggle('low', hp < 0.35);
-    el['fx-damage'].style.opacity = String(clamp((1 - hp) * 0.9 + (p.hurtT > 0.9 ? 0.4 : 0), 0, 1));
+    const dmg = Math.round(clamp((1 - hp) * 0.9 + (p.hurtT > 0.9 ? 0.4 : 0), 0, 1) * 50) / 50;
+    if (dmg !== this._dmg) {
+      this._dmg = dmg;
+      el['fx-damage'].style.opacity = String(dmg);
+    }
     const eva = p.eva;
-    el['vital-o2'].hidden = !eva;
+    if (el['vital-o2'].hidden === eva) el['vital-o2'].hidden = !eva;
     if (eva) {
       const o2 = clamp(game.o2 / game.o2Max, 0, 1);
-      el['vital-o2'].querySelector('i').style.transform = `scaleX(${o2})`;
-      el['vital-o2'].querySelector('em').textContent = `${Math.ceil(game.o2)}s`;
+      const secs = Math.ceil(game.o2);
+      if (secs !== this._o2) {
+        this._o2 = secs;
+        this.o2Bar.style.transform = `scaleX(${o2})`;
+        this.o2Text.textContent = `${secs}s`;
+      }
       el['vital-o2'].classList.toggle('low', o2 < 0.25);
     }
     el['btn-flash'].classList.toggle('on', p.lampOn);

@@ -562,6 +562,25 @@ function defineGameApi() {
       it.use();
       return 'ok';
     },
+    // jump straight into play with a set of story flags (for screenshots and tests)
+    quickStart(flags = []) {
+      menus.hideTitle();
+      resetState();
+      state.started = true;
+      for (const f of flags) state.flags[f] = true;
+      player.eva = false;
+      player.frozen = false;
+      player.health = 100;
+      applyRules(true);
+      player.place(A.spawn.x, A.spawn.z, 0, 0);
+      world.current = null;
+      hud.show(true);
+      hud.setLayout('walk');
+      hud.frost(0, 0);
+      hud.fade(0, 0);
+      game.mode = 'play';
+      missions.begin(false);
+    },
     step: () => (missions.step ? missions.step.id : 'done'),
     focus: () => (game.interact.focus ? game.interact.focus.id : null),
     info: () => ({

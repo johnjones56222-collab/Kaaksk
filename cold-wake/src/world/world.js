@@ -363,16 +363,22 @@ export class World {
       if (f.t >= f.duration) this.fxLights.splice(i, 1);
     }
     const fx = this.fxLights;
-    const keys = cur && this.roomLights[cur.index] ? this.roomLights[cur.index].filter((l) => l.key) : [];
-    // nearest key fixtures to the camera
-    let cands = keys;
-    if (keys.length > 3) {
-      cands = keys
-        .map((l) => ({ l, d: (l.x - camPos.x) ** 2 + (l.z - camPos.z) ** 2 }))
-        .sort((p, q) => p.d - q.d)
-        .slice(0, 3)
-        .map((o) => o.l);
+    // nearest key fixtures to the camera, re-picked a few times a second
+    this._poolT = (this._poolT || 0) - dt;
+    if (this._poolT <= 0 || this._poolRoom !== cur) {
+      this._poolT = 0.2;
+      this._poolRoom = cur;
+      const keys = cur && this.roomLights[cur.index] ? this.roomLights[cur.index].filter((l) => l.key) : [];
+      this._cands = keys;
+      if (keys.length > 3) {
+        this._cands = keys
+          .map((l) => ({ l, d: (l.x - camPos.x) ** 2 + (l.z - camPos.z) ** 2 }))
+          .sort((p, q) => p.d - q.d)
+          .slice(0, 3)
+          .map((o) => o.l);
+      }
     }
+    const cands = this._cands || [];
     const nFx = Math.min(fx.length, 2);
     // keep lights on the fixture they already have; hand the rest to free lights
     const free = cands.slice();

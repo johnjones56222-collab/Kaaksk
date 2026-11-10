@@ -57,7 +57,7 @@ export function buildAICore(ctx) {
   const core = new THREE.Group();
   core.position.set(cx, 2.3, cz);
   const colOff = new THREE.Color(0.5, 0.05, 0.03);
-  const colOn = new THREE.Color(0.35, 1.5, 3.0);
+  const colOn = new THREE.Color(0.3, 1.3, 2.6);
   const mGlow = new THREE.MeshBasicMaterial({ color: colOff.clone() });
   const mWire = new THREE.LineBasicMaterial({ color: colOff.clone(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
   const heart = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 2), mGlow);
@@ -80,9 +80,9 @@ export function buildAICore(ctx) {
     api.level += (target - api.level) * Math.min(1, dt * 1.5);
     api.talk = Math.max(0, api.talk - dt * 2.5);
     const L = api.level;
-    const pulse = 0.75 + 0.25 * Math.sin(t * (1.5 + L * 2)) + api.talk * 0.9;
-    mGlow.color.copy(colOff).lerp(colOn, L).multiplyScalar((0.5 + L * 1.1) * pulse);
-    mWire.color.copy(colOff).lerp(colOn, L).multiplyScalar(0.8 + L);
+    const pulse = 0.75 + 0.25 * Math.sin(t * (1.5 + L * 2)) + api.talk * 0.5;
+    mGlow.color.copy(colOff).lerp(colOn, L).multiplyScalar((0.5 + L * 0.25) * pulse);
+    mWire.color.copy(colOff).lerp(colOn, L).multiplyScalar(0.55 + L * 0.15);
     const spin = 0.08 + L * 0.7;
     cage.rotation.y += dt * spin;
     cage.rotation.x += dt * spin * 0.6;
