@@ -1,0 +1,16 @@
+{
+  "name": "cold-wake",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cold Wake - a first-person 3D game aboard a stricken deep-space survey ship. Builds to one self-contained HTML file.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --dev",
+    "test": "node build.mjs && node tests/playthrough.cjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "three": "^0.170.0"
+  }
+}
