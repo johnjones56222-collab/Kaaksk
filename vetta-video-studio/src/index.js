@@ -396,6 +396,22 @@ async function api(req, env, ctx, path) {
     return json({ file_id: file.id, kind: file.kind, url: await cachedUrl(env, key, file.id) });
   }
 
+  // An image for a vision model to look at (a generated image, an attachment or
+  // one Context.dev found). The page can't read most of these links itself
+  // (no CORS), so they come through here; it then shrinks them and sends them
+  // inline, which every provider accepts and which works even where a site
+  // blocks hotlinking.
+  if (path === "/api/image") {
+    const url = new URL(req.url).searchParams.get("url") || "";
+    if (!/^https?:\/\//i.test(url)) return json({ error: "Not an http(s) link." }, 400);
+    const res = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 (compatible; VettaStudio/1.0)", accept: "image/*" }, redirect: "follow" });
+    const type = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (!res.ok) return json({ error: `Image link answered ${res.status}.` }, 502);
+    if (!type.startsWith("image/") || type === "image/svg+xml") return json({ error: `Not a picture (${type || "unknown type"}).` }, 415);
+    if (Number(res.headers.get("content-length")) > 25e6) return json({ error: "Image is too large." }, 413);
+    return new Response(res.body, { headers: { "content-type": type, "cache-control": "private, max-age=3600" } });
+  }
+
   // LLMs for the Agent tab. Batch-only models can't answer a chat, so they're left out.
   if (path === "/api/llm-models") {
     const models = await listAll(key, "/models");

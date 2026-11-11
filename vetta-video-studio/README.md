@@ -39,6 +39,19 @@ https://vetta-video-studio.johnjones56222.workers.dev
   model's context. `save_reference_image` (always available) copies an image
   link into Vetta Files (`/api/import`) so it can be a reference. Research runs
   without approval; only generating does.
+- Vision: Claude, Gemini and ChatGPT models that take images (matched by name
+  in `VISION` in `src/page.html`, since Vetta's model list has no vision flag;
+  gpt-oss, gpt-3.5, o1/o3-mini and Gemma are left out) see the user's attached
+  images, the images they generate, and Context.dev pictures (`find_images`,
+  `brand_lookup` logos and backdrops, `read_page` preview, `search_news`,
+  `save_reference_image`). Tool results can only be text, so after each run of
+  tool results the page adds a user message with that run's pictures, each
+  labeled with where it came from. The Worker's `/api/image` fetches each link
+  (the page can't, no CORS; SVGs are refused), and the page shrinks it to
+  1024 px JPEG and sends it inline as a data URL, which every provider accepts.
+  Only the newest 16 images go with each step. A listed model that still
+  rejects images is retried text-only and remembered (`no_vision` in
+  localStorage). The model line shows "sees images" when the model can.
 - Archive: every video and image batch has Archive / Restore, and each list
   has an Archive view. Archived ids (`med_` videos, `fil_` images) are kept in
   KV under a hash of the API key (`archive:<hash>`), so the archive follows the

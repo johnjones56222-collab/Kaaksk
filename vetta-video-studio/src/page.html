@@ -927,6 +927,19 @@ let vaniModels = []; // { id, name, efforts, vision, tier, remaining_tokens }
 const models_ready = () => $("agentModel").options.length > 1;
 const vaniInfo = (sel) => (sel.startsWith("vani:") ? vaniModels.find((m) => "vani:" + m.id === sel) : null);
 
+// Vision: Vetta's model list doesn't say which models take images, so these are
+// the Claude, Gemini and ChatGPT families that do (new versions match by
+// themselves). Left out: gpt-oss, gpt-3.5, o1-mini/o3-mini and Gemma. A model
+// that still turns images down is remembered in no_vision and sent text only.
+// Vani models never get images: its API rejects image parts.
+const VISION = [
+  /^~?anthropic\/claude-/,
+  /^~?google\/gemini-/,
+  /^~?openai\/(gpt-4o|gpt-4\.1|gpt-4-turbo|gpt-[5-9]|chatgpt-|o1(?!-mini)|o3(?!-mini)|o4)/,
+];
+const noVision = () => { try { return JSON.parse(store.get("no_vision")) || []; } catch { return []; } };
+const canSee = (sel) => !sel.startsWith("vani:") && VISION.some((r) => r.test(sel)) && !noVision().includes(sel);
+
 function systemPrompt() {
   return [
     "You are the agent inside Vetta Studio, a web app for making AI videos and images with Vetta. You make what the user asks for by calling tools.",
@@ -938,6 +951,7 @@ function systemPrompt() {
       : "Auto mode is on: generations start without asking."),
     "- Files the user attached are listed in their message as image file ids (fil_...) or video links; use them as reference_image(s) or reference_video.",
     "- A web image (from find_images, brand_lookup or the user) must go through save_reference_image first; pass the file_id it returns. A video takes one reference image.",
+    ...(canSee(agentModel()) ? ["- You can see images. The user's attached images, the images you generate and the pictures web research finds (find_images, brand_lookup, read_page, search_news, save_reference_image) are shown to you after the message or tool that brought them, each labeled with where it came from. Look at them: describe or judge them when asked, pick references by what they actually show, and check a generated image matches the request before calling it done (offer a fix if it doesn't)."] : []),
     ...(store.get("context_key") ? ["- You can research with web_search, read_page, find_images, search_news and brand_lookup. Use them when the video depends on something real (a place, landmark, product, brand, person, current event) or the user asks you to look something up or find a reference picture, so the prompt gets the details right. Don't research simple imaginative requests. Keep it to a few calls."] : []),
     "- Keep replies short. Write plain text: no markdown (no **bold**, headings or tables), since the chat shows it as typed. Reply in the user's language.",
   ].join("\n");
@@ -978,7 +992,7 @@ function showModelInfo(vaniError) {
   const tokens = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : Math.round(n / 1e3) + "k");
   $("agentModelHint").textContent = vaniError ? "Couldn't load Vani models: " + vaniError
     : m ? ["Vani", m.tier && m.tier + " tier", m.remaining_tokens != null && "about " + tokens(m.remaining_tokens) + " tokens left"].filter(Boolean).join(" · ")
-    : store.get("vani_key") ? "Vetta" : "Vetta · add a Vani key in Settings to use Vani models too";
+    : (canSee(agentModel()) ? "Vetta · sees images" : "Vetta") + (store.get("vani_key") ? "" : " · add a Vani key in Settings to use Vani models too");
 }
 $("agentModel").addEventListener("change", () => { store.set("agent_model", $("agentModel").value); showModelInfo(); });
 $("agentEffort").addEventListener("change", () => store.set("agent_effort", $("agentEffort").value));
@@ -1207,10 +1221,19 @@ const apiMessage = ({ role, content, tool_calls, tool_call_id }) =>
   Object.fromEntries(Object.entries({ role, content, tool_calls, tool_call_id }).filter(([, v]) => v !== undefined));
 
 // One model call. Returns { content, tool_calls, reasoning }.
-async function chatStep(messages) {
+async function chatStep() {
   const sel = agentModel();
   if (!sel.startsWith("vani:")) {
-    const res = await call("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: sel, tools: agentTools(), messages }) });
+    const vision = canSee(sel);
+    const send = async (v) => call("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: sel, tools: agentTools(), messages: await buildMessages(v) }) });
+    let res;
+    try { res = await send(vision); } catch (e) {
+      // A model on the vision list that turns images down: remember it and go on without them.
+      if (!vision || e instanceof TypeError || !/image|vision|multimodal|modalit|content.?(type|part)|unsupported|invalid.*(content|message)/i.test(e.message)) throw e;
+      res = await send(false);
+      store.set("no_vision", JSON.stringify([...noVision(), sel]));
+      showModelInfo();
+    }
     const m = res.choices?.[0]?.message;
     if (!m) throw new Error("The model sent back an empty reply.");
     return { content: m.content || null, tool_calls: m.tool_calls, reasoning: m.reasoning_content || m.reasoning || "" };
@@ -1220,7 +1243,7 @@ async function chatStep(messages) {
   const res = await fetch((typeof API === "string" ? API : "") + "/api/vani/chat", {
     method: "POST",
     headers: { "content-type": "application/json", "x-vetta-key": store.get("vetta_key"), "x-vani-key": store.get("vani_key") },
-    body: JSON.stringify({ model: sel.slice(5), tools: agentTools(), messages, reasoning_effort: m?.efforts.includes(effort) ? effort : undefined }),
+    body: JSON.stringify({ model: sel.slice(5), tools: agentTools(), messages: await buildMessages(false), reasoning_effort: m?.efforts.includes(effort) ? effort : undefined }),
   });
   if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `HTTP ${res.status}`); }
   // Server-sent events: content, reasoning and tool calls arrive in pieces.
@@ -1265,6 +1288,101 @@ const forModel = (name, r) => {
   return r;
 };
 
+// ---- Vision ----
+// Images a vision model gets to see: { url, label } for each, from the user's
+// attachments and from tool results (read from the cards, so chats saved
+// before this existed work too). Only the newest VISION_MAX are sent, so a long
+// chat doesn't resend every picture on every step.
+const VISION_MAX = 16;
+const noSvg = (u) => u && !/\.svg(\?|#|$)/i.test(u);
+function imagesFor(name, r) {
+  if (!r || r.error || r.declined) return [];
+  const out = [];
+  if (name === "generate_image") for (const f of r.files || []) out.push({ url: f.url, label: `Generated image ${f.file_id}` });
+  if (name === "find_images") (r.images || []).forEach((i, n) => out.push({ url: i.url, label: `find_images #${n + 1}${i.alt ? ` (alt: ${i.alt.slice(0, 80)})` : ""}` }));
+  if (name === "brand_lookup") {
+    for (const l of r.logos || []) out.push({ url: l.url, label: `${r.name || "Brand"} logo${l.type ? ` (${l.type})` : ""}` });
+    for (const b of r.backdrops || []) out.push({ url: b.url, label: `${r.name || "Brand"} backdrop` });
+  }
+  if (name === "read_page" && r.image) out.push({ url: r.image, label: `Preview image of ${r.url}` });
+  if (name === "search_news") for (const a of r.articles || []) if (a.image_url) out.push({ url: a.image_url, label: `News image: ${a.title}` });
+  if (name === "save_reference_image" && r.kind !== "video") out.push({ url: r.url, label: `Saved reference ${r.file_id}` });
+  return out.filter((i) => noSvg(i.url)).slice(0, 12);
+}
+
+// The page can't read most image links itself, so /api/image fetches them; each
+// is shrunk to 1024 px (JPEG on white) so a step stays small. Kept in memory only.
+const imageCache = new Map();
+function inlineImage(url) {
+  if (!imageCache.has(url)) imageCache.set(url, (async () => {
+    try {
+      const res = await fetch((typeof API === "string" ? API : "") + "/api/image?url=" + encodeURIComponent(url), { headers: { "x-vetta-key": store.get("vetta_key") } });
+      if (!res.ok) return null;
+      const bmp = await createImageBitmap(await res.blob());
+      const s = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement("canvas");
+      cv.width = Math.max(1, Math.round(bmp.width * s)); cv.height = Math.max(1, Math.round(bmp.height * s));
+      const g = cv.getContext("2d");
+      g.fillStyle = "#fff"; g.fillRect(0, 0, cv.width, cv.height);
+      g.drawImage(bmp, 0, 0, cv.width, cv.height);
+      return cv.toDataURL("image/jpeg", 0.85);
+    } catch { return null; }
+  })());
+  return imageCache.get(url);
+}
+
+// The conversation as the model gets it. With vision, a user message carries
+// its attached images, and after each run of tool results comes a user message
+// with the pictures those tools brought back (tool results can only be text).
+async function buildMessages(vision) {
+  const head = { role: "system", content: systemPrompt() };
+  if (!vision) return [head, ...agent.messages.map(apiMessage)];
+  const names = {};
+  for (const m of agent.messages) for (const c of m.tool_calls || []) names[c.id] = c.function.name;
+  const plan = []; // [message, images]
+  for (let i = 0; i < agent.messages.length; i++) {
+    const m = agent.messages[i];
+    if (m.role === "user") {
+      plan.push([apiMessage(m), (m.ui?.attachments || []).filter((f) => f.kind === "image").map((f) => ({ url: f.url, label: `Attached by the user: ${f.name}` }))]);
+      continue;
+    }
+    plan.push([apiMessage(m), []]);
+    if (m.role === "tool" && agent.messages[i + 1]?.role !== "tool") {
+      // End of a run of tool results: gather this run's images.
+      const imgs = [];
+      for (let j = i; j >= 0 && agent.messages[j].role === "tool"; j--) {
+        const t = agent.messages[j];
+        imgs.unshift(...imagesFor(names[t.tool_call_id], agent.cards[t.tool_call_id]?.result));
+      }
+      if (imgs.length) plan.push([{ role: "user", content: "" }, imgs, true]);
+    }
+  }
+  // Keep the newest VISION_MAX images; older ones become a short note.
+  let left = VISION_MAX;
+  for (let k = plan.length - 1; k >= 0; k--) {
+    const imgs = plan[k][1];
+    const keep = Math.max(0, Math.min(imgs.length, left));
+    plan[k][3] = imgs.length - keep; // how many are left out
+    plan[k][1] = imgs.slice(imgs.length - keep);
+    left -= keep;
+  }
+  const out = [head];
+  for (const [msg, imgs, fromTools, dropped] of plan) {
+    if (!imgs.length && !(fromTools && dropped)) { if (!fromTools) out.push(msg); continue; }
+    const parts = [];
+    if (fromTools) parts.push({ type: "text", text: "Images from the tool results above (the user sees them too):" });
+    else if (msg.content) parts.push({ type: "text", text: msg.content });
+    if (dropped) parts.push({ type: "text", text: `(${dropped} older image${dropped === 1 ? "" : "s"} not shown again.)` });
+    const data = await Promise.all(imgs.map((im) => inlineImage(im.url)));
+    imgs.forEach((im, n) => {
+      if (data[n]) parts.push({ type: "text", text: `[${im.label}]` }, { type: "image_url", image_url: { url: data[n] } });
+      else parts.push({ type: "text", text: `[${im.label}: could not be loaded]` });
+    });
+    out.push({ ...msg, content: parts });
+  }
+  return out;
+}
+
 async function runAgent() {
   if (agentRunning) return;
   agentRunning = true; agentStop = false; agent.error = "";
@@ -1301,7 +1419,7 @@ async function runAgent() {
       }
       if (!last || last.role === "assistant") break; // the model answered; wait for the user
       step++;
-      const m = await chatStep([{ role: "system", content: systemPrompt() }, ...agent.messages.map(apiMessage)]);
+      const m = await chatStep();
       if (!m.content && !m.tool_calls?.length) throw new Error("The model sent back an empty reply.");
       agent.messages.push({ role: "assistant", content: m.content, ...(m.tool_calls?.length ? { tool_calls: m.tool_calls } : {}), ...(m.reasoning ? { reasoning: m.reasoning } : {}) });
       saveAgent(); renderChat();
@@ -1381,6 +1499,10 @@ document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("cli
 
 // ---- Update log (website only; a copy opened as a local file doesn't show it) ----
 const UPDATES = [
+  { id: 12, date: "2026-11-11", title: "The agent can see images", items: [
+    "Claude, Gemini and ChatGPT models that support vision now see pictures in the Agent tab. The model line says \"sees images\" when the picked model can.",
+    "They see the images you attach, the images they make (so they can check the result matches what you asked for), and the pictures Context.dev research finds: page images, logos, brand backdrops and news photos.",
+    "Only the newest 16 pictures go along with each step, so long chats stay fast. Vani models still get text only, because Vani's API doesn't accept images." ] },
   { id: 11, date: "2026-10-24", title: "No more videos queued forever", items: [
     "A video that hasn't finished an hour after it started is now marked \"stuck\" with an explanation, instead of showing queued or processing forever. That happens when Vetta's video provider drops a job, which Vetta can't cancel (and doesn't charge for).",
     "Stuck and failed videos have a Try again link that starts the same video again, plus Archive to clear them away.",
