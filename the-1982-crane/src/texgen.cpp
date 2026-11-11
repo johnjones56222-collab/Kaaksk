@@ -1526,7 +1526,7 @@ static const SignDef g_signs[] = {
     CHALK("c_relief", 400, 80, "RELIEF IS COMING"),
     CHALK("c_again", 256, 80, "AGAIN"),
     BOARD("stormlock", 192, 80, 0xd09a10, 0x0c0c0c, "SLEW LOCK\n~STORM BRAKE - PULL DOWN"),
-    BOARD("feeder", 176, 72, 0xd8d2ba, 0x101010, "CRANE 7\nFEEDER"),
+    BOARD("feeder", 176, 72, 0xd8d2ba, 0x101010, "STORM BRAKE\nPUMP"),
     BOARD("gaterel", 176, 72, 0xd09a10, 0x0c0c0c, "GATE RELEASE\n~PULL TO DISENGAGE"),
     BOARD("cab", 192, 64, 0xe0dccc, 0xa81610, "OPERATOR ONLY"),
     BOARD("maxload", 192, 64, 0xd8d2ba, 0x101010, "S.W.L. 40 TONS"),
