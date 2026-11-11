@@ -87,3 +87,19 @@ The Updates button in the header opens the update log (`UPDATES` in
 `src/page.html`; add new entries at the top with a higher `id`). It shows a dot
 until the newest entry has been seen, and only appears on the website, not
 when the page is opened as a local file.
+
+## Android app
+
+`android/` is a small native wrapper (WebView) that opens the studio
+full-screen, with file uploads, downloads and saved settings working. It
+builds on the phone in Termux without Android Studio:
+
+```sh
+pkg install aapt aapt2 apksigner d8 openjdk-21 zip
+export ANDROID_JAR=/path/to/android-34/android.jar
+bash android/build.sh          # -> android/VettaStudio.apk
+termux-open android/VettaStudio.apk   # opens the Android installer
+```
+
+The signing key is created once at `~/.vetta-studio.keystore`; keep it, since
+updates must be signed with the same key to install over the old version.
