@@ -16,7 +16,11 @@ void rigger_spawn(Game& g, const Vec3& pos, int state) {
     r.visible = true;
     Vec3 d = g.pos - r.pos;
     r.yaw = std::atan2(d.x, d.z);
-    if (state == RS_STATUE && g.stage == ST_OPEN) r.yaw = -PI * 0.5f - 0.5f; // watching the container door
+    if (state == RS_STATUE && g.stage == ST_OPEN) {
+        // it stands and watches the container door
+        Vec3 door = pad_pos() + pad_dir() * (LOAD_L * 0.5f);
+        r.yaw = std::atan2(door.x - r.pos.x, door.z - r.pos.z);
+    }
 }
 
 static bool player_exposed(const Game& g) {

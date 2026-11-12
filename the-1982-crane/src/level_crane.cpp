@@ -426,7 +426,7 @@ void build_crane(Builder& b) {
         w.cabControlsInteract = (int)w.interacts.size() - 1;
         w.useInteract[U_CAB_CONTROLS] = w.cabControlsInteract;
         it.arg = U_CAB_LEAVE;
-        it.box = AABB(Vec3(2.45f, 31.5f, -0.5f), Vec3(2.7f, 33.4f, 0.5f));
+        it.box = AABB(Vec3(2.45f, 31.5f, -1.25f), Vec3(2.8f, 33.5f, 1.25f)); // the whole rear wall, so it can be reached from the seat
         w.interacts.push_back(it);
         w.cabLeaveInteract = (int)w.interacts.size() - 1;
         w.useInteract[U_CAB_LEAVE] = w.cabLeaveInteract;
@@ -543,7 +543,7 @@ void build_crane(Builder& b) {
         it.box = AABB(Vec3(LOAD_L * 0.5f - 0.2f, -LOAD_BOTTOM, -LOAD_W * 0.5f), Vec3(LOAD_L * 0.5f + 0.3f, -2.0f, LOAD_W * 0.5f));
         w.interacts.push_back(it);
         w.useInteract[U_LOAD_DOOR] = (int)w.interacts.size() - 1;
-        w.usePos[U_LOAD_DOOR] = Vec3(12.0f + LOAD_L * 0.5f + 0.6f, 1.2f, -36.0f);
+        w.usePos[U_LOAD_DOOR] = pad_pos() + pad_dir() * (LOAD_L * 0.5f + 0.6f) + Vec3(0, 1.2f, 0);
     }
     // lights that ride on the crane
     w.lightFlood = b.spot(CRANE_POS + Vec3(20, 34, 0), Vec3(0, -1, 0), 34.0f, 0xfff0d8, 3.4f, 50.0f, LG_CRANE, FL_BUZZ, 2.2f);

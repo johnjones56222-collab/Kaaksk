@@ -29,6 +29,9 @@ struct Bot {
     int keypadIdx = 0;
     float aimJitterT = 0;
     int aimVariant = 0;
+    int standIdx = -1;
+    float standAge = 0;
+    Vec3 standPos;
     bool failed = false;
     explicit Bot(Game& game) : g(game) {}
 
@@ -79,12 +82,12 @@ struct Bot {
         if (distXZ(g.pos, target) < tol) return true;
         if (handleDoors()) return false;
         if (path.empty() || repath <= 0 || distXZ(navTarget, target) > 0.5f) {
-            if (!nav_path(g.w, g.pos, target, path)) { path.clear(); path.push_back(target); }
+            if (!nav_path(g.w, g.pos, target, path, false)) { path.clear(); path.push_back(target); }
             pi = 0;
-            repath = 1.5f;
+            repath = 4.0f;
             navTarget = target;
         }
-        while (pi < path.size() && distXZ(g.pos, path[pi]) < 0.4f) pi++;
+        while (pi < path.size() && distXZ(g.pos, path[pi]) < 0.1f) pi++;
         if (pi >= path.size()) { walkTo(target, sprint); return distXZ(g.pos, target) < tol; }
         walkTo(path[pi], sprint);
         return false;
@@ -124,12 +127,19 @@ struct Bot {
         Vec3 center = interactCenter(idx);
         bool seated = g.pstate == PS_SEATED;
         if (!seated) {
-            Vec3 stand = standOverride ? *standOverride : approachPoint(center, it.range);
+            // the stand point is chosen once per target so the bot does not dither between candidates
+            if (standIdx != idx || standAge > 6.0f) {
+                standIdx = idx;
+                standAge = 0;
+                standPos = standOverride ? *standOverride : approachPoint(center, it.range);
+            }
+            standAge += g.dt;
+            if (standOverride) standPos = *standOverride;
             bool onNav = !standOverride;
-            float d = distXZ(g.pos, stand);
+            float d = distXZ(g.pos, standPos);
             if (d > 0.3f) {
-                if (onNav) navTo(stand, false, 0.25f); else walkTo(stand);
-                if (d > 0.9f) return false;
+                if (onNav) navTo(standPos, false, 0.25f); else walkTo(standPos);
+                return false;
             }
         }
         // try the centre first, then other points of the box
@@ -169,7 +179,9 @@ struct Bot {
         Vec3 stand(ip.x - 0.2f, -0.5f, ip.z - 0.75f);
         if (item == IT_TAPE3) stand = Vec3(ip.x - 0.9f, -0.5f, ip.z);
         if (!onBarge()) {
-            if (navTo(head, false, 0.4f)) walkTo(foot);
+            // once lined up with the gangway, commit to walking down it
+            if (g.pos.z < QUAY_Z + 2.0f && std::fabs(g.pos.x - 27.0f) < 0.7f) walkTo(foot);
+            else navTo(head, false, 0.3f);
             return false;
         }
         if (g.pos.x < 31.6f) {
@@ -195,11 +207,11 @@ struct Bot {
     // ---- crane ----
     void operate() {
         const CraneSim& cr = g.crane;
-        float ts = wantEnding == 1 ? PI * 0.5f : 0.0f, tt = wantEnding == 1 ? 26.0f : 20.0f;
+        float ts = wantEnding == 1 ? PI * 0.5f : PAD_SLEW, tt = wantEnding == 1 ? 26.0f : PAD_R;
         float es = wrapAngle(ts - cr.slew), et = tt - cr.trolley;
         c.craneSlew = clampv(es * 5.0f, -1.0f, 1.0f);
         c.craneTrolley = clampv(et * 1.5f, -1.0f, 1.0f);
-        bool placed = std::fabs(es) < 0.05f && std::fabs(et) < 0.6f;
+        bool placed = std::fabs(es) < 0.03f && std::fabs(et) < 0.4f;
         if (placed) c.craneHoist = -1.0f;
         if ((cr.ready == 2 && wantEnding == 1) || (cr.ready == 4 && wantEnding == 2)) {
             c.craneHoist = 0;
@@ -230,6 +242,9 @@ struct Bot {
                 return false;
             }
             if (std::fabs(d.angle) < std::fabs(d.openAngle) * 0.8f) return false;
+            // line up with the gateway before walking into the cage
+            bool lined = std::fabs(g.pos.x - front.x) < 0.3f && g.pos.z < front.z + 0.4f;
+            if (!lined) { navTo(front, false, 0.2f); return false; }
             Vec3 st = l.bottom;
             interactIdx(ladderInteract(lad, 0), &st);
             return false;
@@ -246,8 +261,27 @@ struct Bot {
             goalT = 0;
             path.clear();
             aimVariant = 0;
+            standIdx = -1;
             if (g_verbose) printf("    [%7.1fs] goal: %s  (pos %.1f %.1f %.1f)\n", g.time, name, g.pos.x, g.pos.y, g.pos.z);
         }
+    }
+
+    // diagnostics for a stuck bot: what is around the player?
+    void dump() {
+        World& w = g.w;
+        printf("  --- bot dump: pos (%.2f %.2f %.2f) yaw %.2f pitch %.2f pstate %d fade %.2f onGround %d\n", g.pos.x, g.pos.y, g.pos.z, g.yaw, g.pitch, g.pstate, g.fade, g.onGround);
+        if (pi < path.size()) printf("      next waypoint (%.2f %.2f %.2f), %zu left\n", path[pi].x, path[pi].y, path[pi].z, path.size() - pi);
+        std::vector<int> near;
+        AABB bx(g.pos - Vec3(0.45f, 0.1f, 0.45f), g.pos + Vec3(0.45f, 1.8f, 0.45f));
+        w.query(bx, near);
+        for (int ci : near) {
+            const Collider& c0 = w.colliders[(size_t)ci];
+            printf("      collider %d flags %d (%.2f %.2f %.2f)-(%.2f %.2f %.2f)\n", ci, c0.flags, c0.box.mn.x, c0.box.mn.y, c0.box.mn.z, c0.box.mx.x, c0.box.mx.y, c0.box.mx.z);
+        }
+        for (int i = 0; i < D_COUNT; i++)
+            if (w.doors[i].dyn >= 0 && distXZ(w.doorPos[i], g.pos) < 3.0f)
+                printf("      door %d angle %.2f target %.2f lockedBy %d collider enabled %d\n", i, w.doors[i].angle, w.doors[i].target, w.doors[i].lockedBy,
+                       (int)w.colliders[(size_t)w.doors[i].collider].enabled);
     }
 
     void think() {
@@ -346,12 +380,17 @@ struct Bot {
         // stuck detection
         if (length(g.pos - lastPos) > 0.02f || g.actionLock > 0 || g.stage == ST_LOAD) stuckT = 0; else stuckT += g.dt;
         lastPos = g.pos;
-        if (stuckT > 2.5f && c.moveY > 0) {
-            // jiggle sideways and re-plan
-            c.moveX = (g.frame / 30) % 2 ? 1.0f : -1.0f;
-            path.clear();
+        if (stuckT > 1.5f && c.moveY > 0) {
+            // slide sideways, then back off, and re-plan
+            c.moveX = (g.frame / 50) % 2 ? 1.0f : -1.0f;
+            if (stuckT > 3.0f) c.moveY = -1.0f;
+            if (stuckT > 3.6f) { stuckT = 0; path.clear(); standIdx = -1; }
         }
+        if (g_verbose && (g.frame % 120) == 0 && stuckT > 0.5f)
+            printf("      stuck %.1fs at (%.2f %.2f %.2f) move %.1f/%.1f look %.2f wp %zu/%zu target (%.2f %.2f) prompt %d\n", stuckT, g.pos.x, g.pos.y, g.pos.z, c.moveX, c.moveY,
+                   c.lookDX, pi, path.size(), pi < path.size() ? path[pi].x : navTarget.x, pi < path.size() ? path[pi].z : navTarget.z, g.promptIdx);
         if (goalT > 240.0f && goalKey != 36) {
+            dump();
             printf("  BOT TIMEOUT on goal '%s' at (%.2f %.2f %.2f) stage %d prompt %d '%s'\n", goalName.c_str(), g.pos.x, g.pos.y, g.pos.z, g.stage, g.promptIdx,
                    g.promptText.c_str());
             failed = true;
@@ -381,6 +420,9 @@ static RunResult run(Game& g, int ending, int difficulty, bool riggerHarmless, d
     long ticks = 0;
     float peak = 0;
     int saveChecks = 0;
+    float stateTime[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    int chases = 0, lastRs = RS_DORMANT, lastDeaths = 0;
+    double lastT = 0;
     printf("== %s ==\n", label);
     while (g.time < maxTime) {
         bot.think();
@@ -394,6 +436,20 @@ static RunResult run(Game& g, int ending, int difficulty, bool riggerHarmless, d
             for (float v : mixbuf) {
                 if (!std::isfinite(v)) { CHECK(false, "audio produced a non-finite sample"); break; }
                 peak = std::max(peak, std::fabs(v));
+            }
+        }
+        if (g.appMode == AM_PLAY) {
+            lastT = g.time;
+            stateTime[g.rig.state & 7] += dt;
+            if (g.rig.state != lastRs) {
+                if (g.rig.state == RS_CHASE) chases++;
+                if (g_verbose) printf("      [%7.1fs] rigger state %d -> %d  (rigger %.1f %.1f, player %.1f %.1f, dist %.1f)\n", g.time, lastRs, g.rig.state, g.rig.pos.x, g.rig.pos.z,
+                                      g.pos.x, g.pos.z, distXZ(g.rig.pos, g.pos));
+                lastRs = g.rig.state;
+            }
+            if (g.deaths != lastDeaths) {
+                lastDeaths = g.deaths;
+                printf("  [%7.1fs] DEATH #%d (cause %d) at (%.1f %.1f %.1f) during '%s'\n", g.time, g.deaths, g.deathCause, g.pos.x, g.pos.y, g.pos.z, bot.goalName.c_str());
             }
         }
         // invariants
@@ -414,6 +470,7 @@ static RunResult run(Game& g, int ending, int difficulty, bool riggerHarmless, d
             if (!g.saveData.empty()) {
                 static Game* probe = nullptr;
                 if (!probe) { probe = new Game(); game_init(*probe); }
+                probe->deaths = 0;
                 bool ok = game_load(*probe, g.saveData);
                 CHECK(ok, "checkpoint failed to load: %s", g.saveData.c_str());
                 if (ok) {
@@ -443,7 +500,9 @@ static RunResult run(Game& g, int ending, int difficulty, bool riggerHarmless, d
         }
         res.deaths = g.deaths;
     }
-    res.gameTime = g.time;
+    res.gameTime = lastT;
+    printf("  rigger: chases=%d  time patrol=%.0fs investigate=%.0fs chase=%.0fs search=%.0fs stare=%.0fs finale=%.0fs\n", chases, stateTime[RS_PATROL], stateTime[RS_INVESTIGATE],
+           stateTime[RS_CHASE], stateTime[RS_SEARCH], stateTime[RS_STARE], stateTime[RS_FINALE]);
     res.deaths = std::max(res.deaths, g.deaths);
     printf("  -> %s  ending=%d  stage=%d  deaths=%d  game time=%.0fs  ticks=%ld  audio peak=%.2f  save checks=%d\n", res.completed ? "COMPLETED" : "not completed",
            res.ending, res.stageReached, res.deaths, res.gameTime, ticks, peak, saveChecks);

@@ -124,7 +124,8 @@ void world_build_nav(World& w) {
             float fl = w.floorBelow(Vec3(px, 1.05f, pz), 3.0f);
             if (fl < -0.3f) continue;
             n.height[i] = fl;
-            AABB body(Vec3(px - 0.22f, fl + 0.42f, pz - 0.22f), Vec3(px + 0.22f, fl + 1.95f, pz + 0.22f));
+            // a little wider than the player (0.25) so that cell-centre paths always have clearance
+            AABB body(Vec3(px - 0.28f, fl + 0.42f, pz - 0.28f), Vec3(px + 0.28f, fl + 1.95f, pz + 0.28f));
             w.query(body, tmp);
             bool blocked = false;
             for (int ci : tmp) {
@@ -150,7 +151,7 @@ void world_build_nav(World& w) {
             if (!n.walkable(nx, nz)) continue;
             size_t ni = (size_t)nz * n.w + nx;
             if (seen[ni]) continue;
-            if (std::fabs(n.height[ni] - n.height[(size_t)cur]) > 0.45f) continue;
+            if (std::fabs(n.height[ni] - n.height[(size_t)cur]) > 0.3f) continue;
             seen[ni] = 1;
             stack.push_back((int)ni);
         }
@@ -181,7 +182,7 @@ Vec3 nav_snap(const World& w, const Vec3& p, int r) {
 static bool navStep(const NavGrid& n, int x0, int z0, int x1, int z1) {
     if (!n.walkable(x1, z1)) return false;
     float h0 = n.height[(size_t)z0 * n.w + x0], h1 = n.height[(size_t)z1 * n.w + x1];
-    if (std::fabs(h1 - h0) > 0.45f) return false;
+    if (std::fabs(h1 - h0) > 0.3f) return false;
     if (x0 != x1 && z0 != z1) {
         // no corner cutting
         if (!n.walkable(x1, z0) || !n.walkable(x0, z1)) return false;
@@ -204,7 +205,7 @@ static bool navLine(const NavGrid& n, const Vec3& a, const Vec3& b) {
     return true;
 }
 
-bool nav_path(const World& w, const Vec3& from, const Vec3& to, std::vector<Vec3>& path) {
+bool nav_path(const World& w, const Vec3& from, const Vec3& to, std::vector<Vec3>& path, bool smooth) {
     path.clear();
     const NavGrid& n = w.nav;
     if (n.w == 0) return false;
@@ -262,6 +263,19 @@ bool nav_path(const World& w, const Vec3& from, const Vec3& to, std::vector<Vec3
         if (i == sIdx) break;
     }
     std::reverse(raw.begin(), raw.end());
+    if (!smooth) {
+        // keep to cell centres; merge straight runs
+        for (size_t k = 1; k < raw.size(); k++) {
+            bool last = k + 1 == raw.size();
+            if (!last) {
+                Vec3 d0 = raw[k] - raw[k - 1], d1 = raw[k + 1] - raw[k];
+                if (std::fabs(d0.x - d1.x) < 1e-3f && std::fabs(d0.z - d1.z) < 1e-3f && std::fabs(d0.y - d1.y) < 1e-3f) continue;
+            }
+            path.push_back(raw[k]);
+        }
+        if (path.empty()) path.push_back(e);
+        return true;
+    }
     // string pulling
     size_t i = 0;
     while (i + 1 < raw.size()) {

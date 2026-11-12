@@ -1148,7 +1148,7 @@ static void s_calendar(Img& im, int x0, int y0, int w, int h) {
         int col = idx % 7, row = idx / 7;
         float cx = gx + cw * (col + 0.5f), cy = gy + chh * (row + 0.5f);
         strokeRect(im, gx + cw * col, gy + chh * row, gx + cw * (col + 1), gy + chh * (row + 1), 1.0f, ink, 0.35f);
-        char b[4];
+        char b[16];
         snprintf(b, sizeof(b), "%d", d);
         drawTextC(im, FONT_SANS, b, cx, cy + h * 0.025f, h * 0.07f, ink, 0.9f);
         if (d < 11) {

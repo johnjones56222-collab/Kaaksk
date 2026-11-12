@@ -2,7 +2,6 @@
 #include "game.h"
 #include "audio.h"
 
-static const Vec3 PAD(12.0f, 0.0f, -36.0f);
 
 static float ground_at(float x, float z) {
     if (z < QUAY_Z - 0.3f) {
@@ -59,7 +58,7 @@ static void try_release(Game& g) {
         audio_play(S_ERROR, 0.6f);
         if (c.ready == 1) hint(g, "Lower. It has to go all the way under before it will let go.", 4.5f);
         else if (c.ready == 3) hint(g, "Lower. Set it down on the hatch marks first.", 4.5f);
-        else hint(g, "Not here. Over the harbor and under the water - or square on the hatch marks on the quay, jib pointing east.", 6.5f);
+        else hint(g, "Not here. Out over the harbor and under the water - or square on the hatch marks on the quay.", 6.5f);
     }
 }
 
@@ -72,9 +71,10 @@ void crane_update(Game& g, const Controls& in, float dt) {
     float wantSlew = 0, wantTr = 0, wantHo = 0;
 
     if (operating) {
-        wantSlew = clampv(in.craneSlew, -1.0f, 1.0f) * 0.2f;
-        wantTr = clampv(in.craneTrolley, -1.0f, 1.0f) * 2.7f;
-        wantHo = -clampv(in.craneHoist, -1.0f, 1.0f) * 3.0f;
+        // a heavy machine: nothing about it is quick
+        wantSlew = clampv(in.craneSlew, -1.0f, 1.0f) * 0.115f;
+        wantTr = clampv(in.craneTrolley, -1.0f, 1.0f) * 1.9f;
+        wantHo = -clampv(in.craneHoist, -1.0f, 1.0f) * 2.1f;
         if ((wantSlew != 0 || wantTr != 0 || wantHo != 0) && !g.flags[F_OPERATED]) g.flags[F_OPERATED] = true;
         if (in.craneRelease) try_release(g);
     } else if (c.loadReleased) {
@@ -165,8 +165,8 @@ void crane_update(Game& g, const Controls& in, float dt) {
         c.loadPos.y = std::min(c.loadPos.y, WATER_Y - 0.5f) - dt * (0.6f + c.sink * 0.25f);
         if (c.loadPos.y < -60.0f) c.loadPos.y = -60.0f;
     } else if (g.flags[F_RELEASED_QUAY]) {
-        c.loadPos = Vec3(PAD.x, LOAD_BOTTOM, PAD.z);
-        c.loadYaw = 0;
+        c.loadPos = pad_pos() + Vec3(0, LOAD_BOTTOM, 0);
+        c.loadYaw = PAD_SLEW;
     }
     float tilt = c.loadReleased ? 0.0f : 0.02f * std::sin(t * 0.8f);
     Mat4 loadXf = Mat4::translate(c.loadPos) * Mat4::rotY(c.loadYaw + 0.03f * std::sin(t * 0.21f) * (c.loadReleased ? 0.0f : 1.0f)) * Mat4::rotZ(tilt);
@@ -181,7 +181,7 @@ void crane_update(Game& g, const Controls& in, float dt) {
         float bottom = c.loadPos.y - LOAD_BOTTOM;
         bool overWater = c.loadPos.z < QUAY_Z - 2.2f && ground_at(c.loadPos.x, c.loadPos.z) < -10.0f;
         if (overWater) c.ready = (bottom < WATER_Y - LOAD_H * 0.75f) ? 2 : 1;
-        else if (distXZ(c.loadPos, PAD) < 2.4f && std::fabs(wrapAngle(c.slew)) < 0.16f) c.ready = (bottom < 0.14f) ? 4 : 3;
+        else if (distXZ(c.loadPos, pad_pos()) < 2.2f && std::fabs(wrapAngle(c.slew - PAD_SLEW)) < 0.12f) c.ready = (bottom < 0.14f) ? 4 : 3;
     }
 
     // cab levers follow the inputs
@@ -204,7 +204,7 @@ void crane_update(Game& g, const Controls& in, float dt) {
     }
 
     // motors
-    float motor = saturate(std::fabs(c.slewVel) / 0.12f + std::fabs(c.trolleyVel) / 2.5f + std::fabs(c.hoistVel) / 2.8f);
+    float motor = saturate(std::fabs(c.slewVel) / 0.1f + std::fabs(c.trolleyVel) / 1.8f + std::fabs(c.hoistVel) / 2.0f);
     c.motor = dampf(c.motor, motor, 4.0f, dt);
     if (g.appMode == AM_PLAY) {
         if (g.hCraneMotor < 0) g.hCraneMotor = audio_loop_at(S_CRANE_MOTOR, CRANE_POS + Vec3(0, 34, 0), 0.0f, 16.0f);
@@ -214,7 +214,7 @@ void crane_update(Game& g, const Controls& in, float dt) {
 
     // what is on the ladder
     if ((g.pstate == PS_OPERATING || g.pstate == PS_SEATED) && g.flags[F_OPERATED] && !c.loadReleased && g.stage == ST_LOAD) {
-        float total = g.difficulty == 0 ? 230.0f : (g.difficulty == 1 ? 165.0f : 115.0f);
+        float total = g.difficulty == 0 ? 170.0f : (g.difficulty == 1 ? 120.0f : 85.0f);
         c.climb += dt / total;
         c.clangT -= dt;
         if (c.clangT <= 0) {
@@ -240,8 +240,10 @@ void crane_update(Game& g, const Controls& in, float dt) {
             schedule(g, 1.2f, TC_FINALE_SPAWN);
         }
     }
-    if (g.stage == ST_OPEN && g.rig.state == RS_DORMANT && g.pos.y < 6.0f)
-        rigger_spawn(g, Vec3(PAD.x + LOAD_L * 0.5f + 3.2f, 0, PAD.z + 1.9f), RS_STATUE);
+    if (g.stage == ST_OPEN && g.rig.state == RS_DORMANT && g.pos.y < 6.0f) {
+        Vec3 d = pad_dir();
+        rigger_spawn(g, pad_pos() + d * (LOAD_L * 0.5f + 3.0f) + Vec3(-d.z, 0, d.x) * 1.9f, RS_STATUE);
+    }
 }
 
 void crane_timed(Game& g, int code, int arg) {

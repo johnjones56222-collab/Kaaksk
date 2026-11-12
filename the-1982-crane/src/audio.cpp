@@ -1442,8 +1442,9 @@ void audio_mix(float* out, int frames) {
             y = g_ap[c][0].run(y * 0.25f);
             y = g_ap[c][1].run(y);
             float o = (out[i * 2 + c] + y * wet) * master;
-            // soft limiter
-            o = o / (1.0f + std::fabs(o) * 0.6f) * 1.5f;
+            // soft limiter: asymptotically approaches +-1, never clips
+            o *= 1.5f;
+            o = o / (1.0f + std::fabs(o));
             if (!(o == o)) o = 0.0f;
             o = clampv(o, -1.0f, 1.0f);
             out[i * 2 + c] = o;

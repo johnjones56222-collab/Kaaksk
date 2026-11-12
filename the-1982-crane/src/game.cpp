@@ -15,7 +15,7 @@ struct WorldSnapshot {
 static WorldSnapshot g_snap;
 
 static const float EYE_STAND = 1.62f, EYE_CROUCH = 0.98f;
-static const float BODY_HALF = 0.28f, BODY_STAND = 1.75f, BODY_CROUCH = 1.15f, STEP_H = 0.36f;
+static const float BODY_HALF = 0.25f, BODY_STAND = 1.75f, BODY_CROUCH = 1.15f, STEP_H = 0.36f;
 static const float SPD_WALK = 2.6f, SPD_SPRINT = 5.3f, SPD_CROUCH = 1.3f;
 
 // ---------------------------------------------------------------------------
@@ -378,7 +378,7 @@ void apply_world_state(Game& g) {
     c.locked = g.flags[F_STORM_LOCKED];
     if (c.locked) { c.slew = 0.0f; c.autoTarget = 0.0f; c.trolley = 20.0f; c.hoist = 18.9f; }
     if (g.flags[F_RELEASED_WATER]) { c.loadReleased = true; c.slew = PI * 0.5f; c.trolley = 26.0f; c.hoist = 33.5f; c.sink = 30.0f; }
-    if (g.flags[F_RELEASED_QUAY]) { c.loadReleased = true; c.slew = 0.0f; c.trolley = 20.0f; c.hoist = 27.9f; }
+    if (g.flags[F_RELEASED_QUAY]) { c.loadReleased = true; c.slew = PAD_SLEW; c.trolley = PAD_R; c.hoist = 27.9f; }
     w.interacts[(size_t)w.useInteract[U_LOAD_DOOR]].enabled = g.flags[F_RELEASED_QUAY];
     w.dyn[DY_CHALK_AGAIN].visible = g.flags[F_DIED_ONCE];
     w.dyn[DY_CRT_OFFICE].visible = g.events[EV_CRT_ON];
@@ -398,7 +398,10 @@ void apply_world_state(Game& g) {
         g.rig.grace = 25.0f;
     }
     if (g.stage == ST_ESCAPE && g.flags[F_FINALE]) g.flags[F_FINALE] = false; // the chase restarts when the player reaches the ground
-    if (g.stage == ST_OPEN) rigger_spawn(g, Vec3(12.0f + LOAD_L * 0.5f + 3.0f, 0, -34.2f), RS_STATUE);
+    if (g.stage == ST_OPEN) {
+        Vec3 d = pad_dir();
+        rigger_spawn(g, pad_pos() + d * (LOAD_L * 0.5f + 3.0f) + Vec3(-d.z, 0, d.x) * 1.9f, RS_STATUE);
+    }
     if (g.flags[F_RADIO_ON]) g.flags[F_RADIO_ON] = false;
     g.helmetYaw = g.helmetTarget = g.flags[F_HELMET_SEEN] ? -0.9f : 2.4f;
     g.dawn = 0;
@@ -572,10 +575,11 @@ static int pick_interact(const Game& g, const Vec3& o, const Vec3& d) {
         }
         float t;
         if (!rayAABB(ro, rd, it.box, it.range, t)) continue;
-        if (t < bestT) { bestT = t; best = (int)i; }
+        if (t >= bestT) continue;
+        if (interact_prompt(g, (int)i).empty()) continue; // nothing to do with it right now: look past it
+        bestT = t; best = (int)i;
     }
     if (best < 0) return -1;
-    if (interact_prompt(g, best).empty()) return -1;
     if (g.w.interacts[(size_t)best].xfDyn < 0) {
         float block = w.raycast(o, d, bestT, COL_SIGHT);
         if (block < bestT - 0.12f) return -1;
@@ -1408,7 +1412,7 @@ static void modal_update(Game& g, const Controls& c, float dt) {
                 if (atoi(g.keypadEntry.c_str()) == g.keyCode) {
                     g.keypadMsg = 2; g.keypadMsgT = 1.0f;
                     audio_play(S_OK, 0.8f);
-                    schedule(g, 0.9f, TC_KEYCAB_OPEN);
+                    events_timed(g, TC_KEYCAB_OPEN, 0); // the world is paused behind the keypad: open it now
                 } else {
                     g.keypadMsg = 1; g.keypadMsgT = 1.2f;
                     g.keypadEntry.clear();
@@ -1507,8 +1511,9 @@ void game_update(Game& g, const Controls& c, float dtIn) {
         break;
     }
     case PS_SEATED:
-        g.seatYaw = clampv(g.seatYaw + cc.lookDX, -2.5f, 2.5f);
+        g.seatYaw = clampv(g.seatYaw + cc.lookDX, -2.7f, 2.7f);
         g.seatPitch = clampv(g.seatPitch + cc.lookDY, -1.25f, 1.0f);
+        if (cc.back && !busy) { use_object(g, U_CAB_LEAVE); cc.interact = false; }
         break;
     case PS_OPERATING:
         g.seatYaw = clampv(g.seatYaw + cc.lookDX, -1.6f, 1.6f);

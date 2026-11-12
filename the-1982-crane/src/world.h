@@ -231,6 +231,12 @@ static const float HOOK_DROP = 1.6f;         // trolley cable end -> sling point
 static const float LOAD_BOTTOM = 4.6f;       // sling point -> underside of the container
 static const float QUAY_Z = -48.0f;          // water begins north of this
 static const float WATER_Y = -2.4f;
+// The hatch marks on the quay where a lift can be landed: the jib has to be swung to PAD_SLEW
+// and the trolley run to PAD_R.
+static const float PAD_SLEW = -0.45f;
+static const float PAD_R = 22.0f;
+static inline Vec3 pad_dir() { return Vec3(std::cos(PAD_SLEW), 0, -std::sin(PAD_SLEW)); }
+static inline Vec3 pad_pos() { return CRANE_POS + pad_dir() * PAD_R; }
 
 static const int MAX_CHUNK_LIGHTS = 6;
 
@@ -327,7 +333,9 @@ void world_build(World& w);
 void world_build_nav(World& w);
 
 // A* path on the nav grid. Returns false if unreachable. Path excludes the start.
-bool nav_path(const World& w, const Vec3& from, const Vec3& to, std::vector<Vec3>& path);
+// With smooth = false the path keeps to cell centres (only straight runs are merged), which is
+// guaranteed collision free for a body as wide as the player.
+bool nav_path(const World& w, const Vec3& from, const Vec3& to, std::vector<Vec3>& path, bool smooth = true);
 // Nearest walkable cell centre to p (within r cells), or p itself.
 Vec3 nav_snap(const World& w, const Vec3& p, int r = 6);
 bool nav_walkable(const World& w, const Vec3& p);

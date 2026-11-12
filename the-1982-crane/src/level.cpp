@@ -586,7 +586,7 @@ void build_entrance(Builder& b) {
     b.m(M_LINO, 0xb0b0b0, 0.5f);
     b.box(Vec3(bx0, fy, bz0), Vec3(bx1, fy + 0.005f, bz1), F_PY);
     WallStyle bs = {M_PAINTSTEEL, 0x8f9a90, 0.6f, M_PANEL, 0xffffff, 0.6f, 0.14f, 0.6f};
-    Opening wW[2] = {{58.0f, 59.05f, fy, 2.15f, false}, {59.3f, 60.0f, 1.1f, 2.05f, true}};
+    Opening wW[2] = {{58.0f, 59.1f, fy, 2.15f, false}, {59.35f, 60.0f, 1.1f, 2.05f, true}};
     wallRun(b, 1, bx0, bz0, bz1, fy, top, +1, bs, wW, 2);
     Opening wS[1] = {{6.2f, 8.2f, 1.1f, 2.05f, true}};
     wallRun(b, 0, bz1, bx0, bx1, fy, top, -1, bs, wS, 1);
@@ -597,7 +597,7 @@ void build_entrance(Builder& b) {
     b.solid(Vec3(bx0 - 0.35f, top, bz0 - 0.35f), Vec3(bx1 + 0.35f, top + 0.14f, bz1 + 0.35f), SURF_METAL);
     b.m(M_CEILING, 0xc0c0c0, 0.5f);
     b.box(Vec3(bx0, top - 0.01f, bz0), Vec3(bx1, top, bz1), F_NY);
-    makeDoor(b, D_BOOTH, Vec3(bx0, fy, 58.0f), 1.05f, 2.03f, -PI * 0.5f, -1.45f, M_PAINTSTEEL, 0x7a857c, -1, true);
+    makeDoor(b, D_BOOTH, Vec3(bx0, fy, 58.0f), 1.1f, 2.03f, -PI * 0.5f, -1.45f, M_PAINTSTEEL, 0x7a857c, -1, true);
     // desk along the east wall
     b.m(M_WOOD, 0xb09a80, 1.0f).g(0.7f);
     b.box(Vec3(8.02f, fy + 0.74f, 57.25f), Vec3(8.72f, fy + 0.79f, 59.95f));

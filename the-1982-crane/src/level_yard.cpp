@@ -286,7 +286,7 @@ void build_quay(Builder& b) {
         b.m(M_RAIL, 0xffffff, 0.5f);
     }
     // landing zone
-    b.floorDecal("hatch", Vec3(12.0f, 0, -36.0f), 8.0f, 4.2f);
+    b.floorDecal("hatch", pad_pos(), 8.0f, 4.2f, PAD_SLEW);
     b.floorDecal("num7", Vec3(-8.0f, 0, -27.0f), 2.2f, 3.0f);
     // loose stores on the apron
     cableReel(b, 20.0f, -26.5f, 0.3f);
@@ -298,7 +298,7 @@ void build_quay(Builder& b) {
     b.m(M_TARP, 0xa09880, 1.5f);
     for (int i = 0; i < 5; i++) b.box(Vec3(32.5f + (i % 2) * 0.5f, 0.13f + (i / 2) * 0.2f, -27.4f), Vec3(33.0f + (i % 2) * 0.5f, 0.33f + (i / 2) * 0.2f, -26.6f));
     b.collider(Vec3(32.4f, 0, -27.5f), Vec3(33.6f, 0.75f, -26.5f), CF_PROP);
-    forklift(b, 15.0f, -26.0f, -0.6f);
+    forklift(b, 18.5f, -32.5f, -0.6f);
     barrel(b, 36.0f, -26.0f, 0x2a4a6a);
     barrel(b, 36.7f, -26.3f, 0x7a2018);
     // danger boards on stands
@@ -463,7 +463,7 @@ void build_quay(Builder& b) {
         // deck house
         const float hx0 = 32.0f, hx1 = 38.2f, hz0 = -60.2f, hz1 = -53.6f, ht = dk + 2.45f;
         WallStyle st = {M_PAINTSTEEL, 0x8a8f86, 0.6f, M_PANEL, 0xc0c0c0, 0.6f, 0.12f, 0.6f};
-        Opening oW[2] = {{-58.4f, -57.3f, dk + 1.1f, dk + 1.9f, true}, {-56.1f, -55.1f, dk, dk + 2.0f, false}};
+        Opening oW[2] = {{-58.4f, -57.3f, dk + 1.1f, dk + 1.9f, true}, {-56.1f, -55.0f, dk, dk + 2.0f, false}};
         wallRun(b, 1, hx0, hz0, hz1, dk, ht, +1, st, oW, 2);
         Opening oE[1] = {{-58.0f, -56.0f, dk + 1.1f, dk + 1.9f, true}};
         wallRun(b, 1, hx1, hz0, hz1, dk, ht, -1, st, oE, 1);
@@ -477,7 +477,7 @@ void build_quay(Builder& b) {
         b.m(M_WOOD, 0x8a7a66, 0.8f);
         b.box(Vec3(hx0 + 0.06f, dk, hz0 + 0.06f), Vec3(hx1 - 0.06f, dk + 0.012f, hz1 - 0.06f), F_PY);
         b.collider(Vec3(hx0 + 0.06f, dk - 0.2f, hz0 + 0.06f), Vec3(hx1 - 0.06f, dk + 0.012f, hz1 - 0.06f), COL_SOLID, SURF_WOOD);
-        makeDoor(b, D_BARGE, Vec3(hx0, dk, -56.1f), 1.0f, 1.98f, -PI * 0.5f, -1.4f, M_PAINTSTEEL, 0x7a7f76, -1, true);
+        makeDoor(b, D_BARGE, Vec3(hx0, dk, -56.1f), 1.1f, 1.98f, -PI * 0.5f, -1.4f, M_PAINTSTEEL, 0x7a7f76, -1, true);
         b.sign("barge", Vec3(hx0 - 0.065f, dk + 2.1f, -57.8f), Vec3(-1, 0, 0), 1.1f);
         // interior: bunk, table, diver's log, the third fuse
         float fy = dk + 0.012f;

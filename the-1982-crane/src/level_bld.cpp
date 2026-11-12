@@ -59,7 +59,7 @@ void build_office(Builder& b) {
     b.m(M_LINO, 0xc8c8c0, 0.5f);
     b.box(Vec3(x0 + 0.07f, fy - 0.01f, z0 + 0.07f), Vec3(x1 - 0.07f, fy + 0.002f, z1 - 0.07f), F_PY);
     WallStyle st = {M_CORRUGATED, 0xb4b0a2, 0.8f, M_PANEL, 0xffffff, 0.6f, 0.14f, 0.62f};
-    Opening oW[3] = {{30.2f, 31.2f, fy, 2.68f, false}, {32.6f, 34.4f, 1.5f, 2.5f, true}, {36.6f, 38.4f, 1.5f, 2.5f, true}};
+    Opening oW[3] = {{30.2f, 31.3f, fy, 2.68f, false}, {32.6f, 34.4f, 1.5f, 2.5f, true}, {36.6f, 38.4f, 1.5f, 2.5f, true}};
     wallRun(b, 1, x0, z0, z1, fy, top, +1, st, oW, 3);
     Opening oE[2] = {{29.6f, 31.4f, 1.5f, 2.5f, true}, {36.6f, 38.4f, 1.5f, 2.5f, true}};
     wallRun(b, 1, x1, z0, z1, fy, top, -1, st, oE, 2);
@@ -73,22 +73,22 @@ void build_office(Builder& b) {
     b.box(Vec3(x0, top - 0.012f, z0), Vec3(x1, top, z1), F_NY);
     // partition with inner door
     WallStyle ps = {M_PANEL, 0xffffff, 0.6f, M_PANEL, 0xffffff, 0.6f, 0.1f, 0.78f};
-    Opening oP[1] = {{13.2f, 14.25f, fy, 2.62f, false}};
+    Opening oP[1] = {{13.2f, 14.3f, fy, 2.62f, false}};
     wallRun(b, 0, 35.5f, x0 + 0.07f, x1 - 0.07f, fy, top, +1, ps, oP, 1);
-    makeDoor(b, D_OFFICE_INNER, Vec3(13.2f, fy, 35.5f), 1.05f, 2.02f, 0.0f, -1.5f, M_PANEL, 0xc0b8a8, -1, false);
+    makeDoor(b, D_OFFICE_INNER, Vec3(13.2f, fy, 35.5f), 1.1f, 2.02f, 0.0f, -1.5f, M_PANEL, 0xc0b8a8, -1, false);
     // steps
     b.m(M_DIAMOND, 0xb0b0b0, 1.0f).g(0.7f);
     for (int i = 0; i < 3; i++)
-        b.solid(Vec3(11.1f + 0.3f * i, 0, 29.9f), Vec3(12.0f, 0.2f * (i + 1), 31.5f), SURF_METAL, CF_PROP);
+        b.solid(Vec3(10.5f + 0.5f * i, 0, 29.9f), Vec3(12.0f, 0.2f * (i + 1), 31.6f), SURF_METAL, CF_PROP);
     b.g(1.0f);
     b.m(M_PAINTSTEEL, 0x70746c, 1.0f);
     for (int s = 0; s < 2; s++) {
-        float z = s ? 31.5f : 29.9f;
-        b.beam(Vec3(11.15f, 0.2f, z), Vec3(11.15f, 1.1f, z), 0.035f);
+        float z = s ? 31.6f : 29.9f;
+        b.beam(Vec3(10.55f, 0.2f, z), Vec3(10.55f, 1.1f, z), 0.035f);
         b.beam(Vec3(11.95f, 0.6f, z), Vec3(11.95f, 1.55f, z), 0.035f);
-        b.beam(Vec3(11.15f, 1.1f, z), Vec3(11.95f, 1.55f, z), 0.035f);
+        b.beam(Vec3(10.55f, 1.1f, z), Vec3(11.95f, 1.55f, z), 0.035f);
     }
-    makeDoor(b, D_OFFICE, Vec3(x0, fy, 30.2f), 1.0f, 2.08f, -PI * 0.5f, -1.5f, M_PAINTSTEEL, 0x8a8f86, IT_OFFICE_KEY, true);
+    makeDoor(b, D_OFFICE, Vec3(x0, fy, 30.2f), 1.1f, 2.08f, -PI * 0.5f, -1.5f, M_PAINTSTEEL, 0x8a8f86, IT_OFFICE_KEY, true);
     notePaper(b, N_OFFICE_DOOR, Vec3(x0 - 0.075f, 1.85f, 31.62f), Vec3(-1, 0, 0), 0.2f, 0.27f);
     b.sign("office", Vec3(x0 - 0.075f, 2.78f, 30.7f), Vec3(-1, 0, 0), 0.95f);
     cagedLamp(b, Vec3(x0 - 0.07f, 2.9f, 31.75f), Vec3(-1, 0, 0), LG_YARD, FL_BUZZ, 0xffc080, 1.1f, 7.0f);
