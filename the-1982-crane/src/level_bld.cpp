@@ -42,7 +42,7 @@ static void wallShelf(Builder& b, const Vec3& mn, const Vec3& mx, int shelves) {
         float y = lerpf(mn.y + 0.12f, mx.y - 0.02f, (float)i / (float)std::max(1, shelves - 1));
         b.box(Vec3(mn.x, y - t, mn.z), Vec3(mx.x, y, mx.z));
     }
-    b.collider(mn, mx, CF_PROP, SURF_METAL);
+    b.collider(mn, mx, CF_FENCE, SURF_METAL); // see-through so things on the shelves can be picked up
 }
 
 // ---------------------------------------------------------------------------
@@ -486,7 +486,7 @@ void build_crewshop(Builder& b) {
             b.box(Vec3(xa + 0.39f, 0.92f, lz1), Vec3(xa + 0.45f, 1.0f, lz1 + 0.03f));
         }
     }
-    b.collider(Vec3(lx - 0.02f, 0, lz0), Vec3(lx + 8 * lw + 0.02f, lh + 0.03f, lz1), CF_PROP, SURF_METAL);
+    b.collider(Vec3(lx - 0.02f, 0, lz0), Vec3(lx + 8 * lw + 0.02f, lh + 0.03f, lz1), CF_FENCE, SURF_METAL);
     b.interact(IK_NOTE, N_RELIEF_LOCKER, Vec3(lx + 7 * lw, 0.3f, lz1 - 0.05f), Vec3(lx + 8 * lw, lh, lz1 + 0.1f), 2.2f);
     w.notePos[N_RELIEF_LOCKER] = Vec3(lx + 7.5f * lw, 1.2f, lz1);
     hideLocker(b, 0, Vec3(22.3f, 0, z0 + 0.5f), 0.0f, 0x55685c);
