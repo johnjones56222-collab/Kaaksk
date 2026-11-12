@@ -136,7 +136,6 @@ static void buildBank() {
 // ---------------------------------------------------------------------------
 static inline Vec3 hex(u32 c) { return Vec3(((c >> 16) & 255) / 255.0f, ((c >> 8) & 255) / 255.0f, (c & 255) / 255.0f); }
 static inline void setc(Px& p, const Vec3& c) { p.r = c.x; p.g = c.y; p.b = c.z; }
-static inline Vec3 getc(const Px& p) { return Vec3(p.r, p.g, p.b); }
 static inline void mulc(Px& p, float m) { p.r *= m; p.g *= m; p.b *= m; }
 static inline void mixc(Px& p, const Vec3& c, float t) {
     p.r = lerpf(p.r, c.x, t); p.g = lerpf(p.g, c.y, t); p.b = lerpf(p.b, c.z, t);

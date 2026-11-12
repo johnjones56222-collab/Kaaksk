@@ -132,8 +132,7 @@ void makeDoor(Builder& b, int id, const Vec3& hinge, float width, float height, 
     b.pop();
 }
 
-static int g_curItemMesh = -1;
-void beginItem(Builder& b) { b.beginDyn(); g_curItemMesh = -1; }
+void beginItem(Builder& b) { b.beginDyn(); }
 void endItem(Builder& b, int itemId, const Vec3& pos, float yaw, float grab) {
     int mesh = b.endDyn();
     World& w = b.w;

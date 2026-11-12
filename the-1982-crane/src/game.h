@@ -166,6 +166,8 @@ struct Game {
     float fadeSpeed = 1.0f;
     float flash = 0;        // white flash
     float aspect = 1.78f;   // viewport aspect (set by the platform layer; used for tap rays)
+    float bobScale = 1.0f;  // head bob setting
+    bool noteReturnJournal = false; // the open note was opened from the journal
     float blackout = 0;     // scripted dimming of mains lights 0..1
     float interference = 0; // VHS tearing when it is near
     float damage = 0;
@@ -301,6 +303,7 @@ void play_tape(Game& g, int tapeIdx);
 void check_progress(Game& g);
 void apply_world_state(Game& g);
 void use_object(Game& g, int useId);
+void game_interact(Game& g, int interactIdx); // as if the player used it
 
 // timeline codes
 enum TimedCode {

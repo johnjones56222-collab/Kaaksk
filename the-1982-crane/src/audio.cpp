@@ -1124,6 +1124,7 @@ Vec3 g_lpos;
 float g_lyaw = 0;
 AudioEnv g_env, g_envCur;
 float g_peak = 0;
+float g_userVol = 0.9f;
 
 // reverb
 struct Comb {
@@ -1433,7 +1434,7 @@ void audio_mix(float* out, int frames) {
     for (int c = 0; c < 2; c++)
         for (int k = 0; k < 4; k++) g_comb[c][k].fb = fb;
     float peak = 0;
-    float master = clampv(g_envCur.master, 0.0f, 1.5f);
+    float master = clampv(g_envCur.master, 0.0f, 1.5f) * g_userVol;
     for (int i = 0; i < frames; i++) {
         float in = send[(size_t)i];
         for (int c = 0; c < 2; c++) {
@@ -1482,3 +1483,4 @@ void audio_stop_all(float fade) {
         if (g_v[i].active) g_v[i].fadeRate = 1.0f / std::max(0.01f, fade);
 }
 float audio_peak() { return g_peak; }
+void audio_set_volume(float v) { g_userVol = clampv(v, 0.0f, 1.0f); }

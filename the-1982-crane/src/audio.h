@@ -45,3 +45,4 @@ void audio_listener(const Vec3& pos, float yaw);
 void audio_env(const AudioEnv& e);
 void audio_stop_all(float fade = 0.3f);
 float audio_peak(); // recent output peak (diagnostics)
+void audio_set_volume(float v); // user volume 0..1

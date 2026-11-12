@@ -199,6 +199,7 @@ static void reset_state(Game& g) {
     int deaths = g.deaths;
     bool died = g.flags[F_DIED_ONCE];
     float aspect = g.aspect;
+    float bobScale = g.bobScale;
     std::string save = g.saveData;
     bool hasSave = g.hasSave;
     World keep;
@@ -208,6 +209,7 @@ static void reset_state(Game& g) {
     g.difficulty = diff;
     g.deaths = deaths;
     g.aspect = aspect;
+    g.bobScale = bobScale;
     g.saveData = save;
     g.hasSave = hasSave;
     for (int i = 0; i < F_COUNT; i++) g.flags[i] = false;
@@ -972,7 +974,7 @@ void use_object(Game& g, int u) {
     }
 }
 
-static void do_interact(Game& g, int idx) {
+void game_interact(Game& g, int idx) {
     World& w = g.w;
     if (idx < 0) return;
     Interact& it = w.interacts[(size_t)idx];
@@ -1340,7 +1342,7 @@ static void camera_update(Game& g, float dt) {
     default: {
         float eh = lerpf(EYE_STAND, EYE_CROUCH, g.crouchAmt);
         eye = g.pos + Vec3(0, eh - g.landKick, 0);
-        float bob = g.bobAmt;
+        float bob = g.bobAmt * g.bobScale;
         eye.y += std::sin(g.bobPhase * 2.0f) * 0.032f * bob;
         Vec3 right(std::cos(g.yaw), 0, std::sin(g.yaw));
         eye += right * (std::cos(g.bobPhase) * 0.02f * bob);
@@ -1383,7 +1385,8 @@ static void camera_update(Game& g, float dt) {
 static void close_note(Game& g) {
     int n = g.noteOpen;
     g.noteOpen = -1;
-    g.modal = MD_NONE;
+    g.modal = g.noteReturnJournal ? MD_JOURNAL : MD_NONE;
+    g.noteReturnJournal = false;
     audio_play(S_PAPER, 0.5f, 1.2f);
     if (n == N_INCIDENT && !g.events[EV_CRT_ON]) schedule(g, 2.5f, TC_CRT);
     if (n == N_WALT_FINAL) say(g, "", "Put it back in the harbor. Or land it, and see who is knocking.", 5.0f, 0.5f);
@@ -1546,7 +1549,7 @@ void game_update(Game& g, const Controls& c, float dtIn) {
             int ti = pick_interact(g, g.camPos, d);
             if (ti >= 0) act = ti;
         }
-        if (act >= 0) do_interact(g, act);
+        if (act >= 0) game_interact(g, act);
         else if (cc.interact && g.pstate == PS_HIDING) exit_hide(g);
     }
 
