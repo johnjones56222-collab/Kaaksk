@@ -233,6 +233,8 @@ EMSCRIPTEN_KEEPALIVE void app_debug(int cmd, float a, float b, float c, float d)
     case 12: g.powerUp = a; g.flags[F_GEN_RUNNING] = a > 0; break;
     case 13: rigger_spawn(g, Vec3(a, 0, b), (int)c); g.rig.grace = 1000.0f; g.flags[F_RIGGER_ACTIVE] = true; break;
     case 14: g.time = a; break;
+    case 15: g.rig.grace = a; break;
+    case 16: g.stage = (int)a; break;
     default: break;
     }
 }
@@ -267,6 +269,7 @@ EMSCRIPTEN_KEEPALIVE float app_query(int what) {
     case 21: return (float)g.time;
     case 22: return g_fps;
     case 23: return (float)g.frame;
+    case 24: return (float)((S.fullBright ? 1 : 0) | (S.espMonster ? 2 : 0) | (S.espMission ? 4 : 0) | (S.espItems ? 8 : 0));
     case 20: return g.noteOpen;
     case 18: return g.promptIdx >= 0 ? (float)(g.w.interacts[(size_t)g.promptIdx].kind * 100 + g.w.interacts[(size_t)g.promptIdx].arg) : -1.0f;
     default: return 0.0f;
@@ -514,6 +517,8 @@ static void frame() {
     rs.quality = S.quality >= 0 ? S.quality : (g_touchDevice ? 0 : 1);
     rs.renderScale = S.renderScale > 0 ? S.renderScale : g_autoScale;
     rs.brightness = S.brightness;
+    rs.fullBright = S.fullBright;
+    rs.espMonster = S.espMonster;
     render_frame(g, g_fbW, g_fbH, rs, dt);
     ui_draw(g, S, IN, LS, dt, g_fps, g_fbW, g_fbH);
 

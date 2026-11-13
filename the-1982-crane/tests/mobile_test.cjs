@@ -127,7 +127,7 @@ const fs = require('fs');
   check(await q(5) === 4, 'pause button pauses');
   await shot('m06-pause');
   const bw = Math.min(W - 40 * U, 320 * U), bh2 = 46 * U, gap = 10 * U;
-  const pby = Math.max(20 * U, H * 0.5 - (bh2 + gap) * 2.6) + 40 * U;
+  const pby = Math.max(20 * U, H * 0.5 - (bh2 + gap) * 3.1) + 40 * U;
   await tap(W / 2, pby + bh2 / 2);
   await wait(300);
   check(await q(5) === 0, 'RESUME returns to the game');
@@ -170,6 +170,26 @@ const fs = require('fs');
   await wait(300);
   check(await q(6) === 3, 'X lets go of the levers (seated again)');
 
+  // assists from the pause menu on a phone: ASSIST is the third button
+  await tap(W - 34 * U, 34 * U);
+  await wait(200);
+  {
+    const bw3 = Math.min(W - 40 * U, 320 * U), bh3 = 46 * U, gap3 = 10 * U;
+    const by3 = Math.max(20 * U, H * 0.5 - (bh3 + gap3) * 3.1) + 40 * U;
+    await tap(W / 2, by3 + 2 * (bh3 + gap3) + bh3 / 2);
+    await wait(200);
+    await shot('m10-assist-page');
+    const pw3 = Math.min(W - 24 * U, 560 * U), rh3 = Math.min(54 * U, (H - 140 * U) / 4.6), ph3 = rh3 * 4 + 130 * U;
+    const px3 = W / 2 - pw3 / 2, py3 = Math.max(8, (H - ph3) / 2);
+    for (let i = 0; i < 4; i++) await tap(px3 + pw3 - 40 * U, py3 + 46 * U + i * rh3 + rh3 * 0.31);
+    check((await q(24)) === 15, 'all four assists switched on from the ASSIST page (' + (await q(24)) + ')');
+    await tap(W / 2, py3 + ph3 - 54 * U + 21 * U);   // DONE
+    await tap(W / 2, by3 + bh3 / 2);                 // RESUME
+    check(await q(5) === 0, 'back in the game');
+    await dbg(2, 24.5, 0.012, -3.0, -1.57); await dbg(3, 0.0); await dbg(13, 6.0, -3.0, 1); await dbg(15, 0);
+    await settle(10);
+    await shot('m11-assist-on');
+  }
   console.log('errors: ' + errors.length);
   for (const e of errors.slice(0, 10)) console.log('  ' + e);
   console.log(failures === 0 && errors.length === 0 ? 'MOBILE TEST PASSED' : 'MOBILE TEST FAILED (' + failures + ' checks)');

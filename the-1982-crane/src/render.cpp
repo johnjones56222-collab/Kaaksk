@@ -203,7 +203,8 @@ void main() {
         lit += (uFog.rgb * 0.8 + vec3(0.25, 0.30, 0.42) * uLightning.w) * fres;
     }
 #endif
-    lit = mix(lit, albedo, uMisc2.y);
+    // full bright: never darker than the surface's own colour under an even, soft overhead light
+    lit = mix(lit, max(lit, albedo * (1.0 + 0.6 * (N.y * 0.5 + 0.5))), uMisc2.y);
     // fog
     float f = 1.0 - exp(-dist * uFog.w);
     vec3 fogc = uFog.rgb + vec3(0.20, 0.24, 0.34) * uLightning.w + vec3(1.0, 0.93, 0.78) * beamFog;
@@ -241,6 +242,34 @@ void main() {
 #ifdef CUTOUT
     if (texture(uTex, vUVL).a < 0.5) discard;
 #endif
+}
+)";
+
+const char* VS_XRAY = R"(
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNormal;
+uniform mat4 uViewProj;
+uniform mat4 uModel;
+uniform mat3 uNormalMat;
+out vec3 vN;
+out vec3 vW;
+void main() {
+    vec4 w = uModel * vec4(aPos, 1.0);
+    vW = w.xyz;
+    vN = uNormalMat * aNormal;
+    gl_Position = uViewProj * w;
+}
+)";
+const char* FS_XRAY = R"(
+uniform vec3 uCamPos;
+uniform vec4 uColor;
+in vec3 vN;
+in vec3 vW;
+out vec4 frag;
+void main() {
+    float rim = 1.0 - abs(dot(normalize(vN), normalize(uCamPos - vW)));
+    float a = uColor.a * (0.3 + 0.7 * rim * rim);
+    frag = vec4(uColor.rgb * a, a);
 }
 )";
 
@@ -380,6 +409,7 @@ uniform sampler2D uScene;
 uniform vec4 uP0;   // time, fear, interference, fade
 uniform vec4 uP1;   // flash, damage, grain, 1/height
 uniform vec4 uP2;   // dawn, hide, dead, aspect
+uniform vec4 uP3;   // full bright
 in vec2 vUV;
 out vec4 frag;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -420,7 +450,7 @@ void main() {
     col += g * (uP1.z + inter * 0.2) * (1.0 - lum * 0.5);
     if (inter > 0.01) col = mix(col, vec3(hash(uv * 311.0 + t)), inter * inter * 0.35 * step(0.5, hash(vec2(floor(uv.y * 90.0), floor(t * 24.0)))));
     // vignette, pulsing a little with the heart
-    float vig = 1.0 - r2 * (1.35 + fear * 1.3 + 0.25 * fear * sin(t * 7.0));
+    float vig = 1.0 - r2 * (1.35 + fear * 1.3 + 0.25 * fear * sin(t * 7.0)) * (1.0 - 0.75 * uP3.x);
     col *= clamp(vig, 0.0, 1.0);
     // hiding in a locker: looking out through the louvres
     if (uP2.y > 0.001) {
@@ -441,7 +471,9 @@ void main() {
 enum { V_OPAQUE = 0, V_CUTOUT, V_DECAL, V_GLASS, V_WATER, V_COUNT };
 Program g_world[V_COUNT];
 Program g_shadow[2];
-Program g_sky, g_rain, g_halo, g_post;
+Program g_sky, g_rain, g_halo, g_post, g_xray;
+Mat4 g_lastVP = Mat4::identity();
+bool g_lastVPValid = false;
 GLuint g_texArray = 0, g_rainTex = 0;
 GLuint g_vaoStatic = 0, g_vboStatic = 0, g_iboStatic = 0;
 GLuint g_vaoDyn = 0, g_vboDyn = 0, g_iboDyn = 0;
@@ -629,6 +661,7 @@ void render_init() {
     g_rain = gfx_program(VS_RAIN, FS_RAIN, "", "rain");
     g_halo = gfx_program(VS_HALO, FS_HALO, "", "halo");
     g_post = gfx_program(VS_FULL, FS_POST, "", "post");
+    g_xray = gfx_program(VS_XRAY, FS_XRAY, "", "xray");
     // texture array
     glGenTextures(1, &g_texArray);
     glBindTexture(GL_TEXTURE_2D_ARRAY, g_texArray);
@@ -763,6 +796,18 @@ void render_upload_world(const World& w) {
 }
 
 void render_set_debug(int layer, float fullbright) { g_debugLayer = layer; g_fullbright = fullbright; }
+
+bool render_project(const Vec3& p, float W, float H, float& sx, float& sy) {
+    if (!g_lastVPValid) return false;
+    Vec4 c = g_lastVP.mul4(Vec4(p, 1.0f));
+    bool front = c.w > 0.05f;
+    float w = std::max(std::fabs(c.w), 0.05f);
+    float nx = c.x / w, ny = c.y / w;
+    if (!front) { nx = -nx; ny = -ny; if (std::fabs(nx) < 1e-3f && std::fabs(ny) < 1e-3f) ny = -1.0f; }
+    sx = (nx * 0.5f + 0.5f) * W;
+    sy = (0.5f - ny * 0.5f) * H;
+    return front;
+}
 const RenderStats& render_stats() { return g_stats; }
 
 void render_frame(Game& g, int fbW, int fbH, const RenderSettings& rs, float dt) {
@@ -801,6 +846,8 @@ void render_frame(Game& g, int fbW, int fbH, const RenderSettings& rs, float dt)
     Mat4 proj = Mat4::perspective(fovy, aspect, 0.06f, 520.0f);
     Mat4 view = game_view_matrix(g);
     Mat4 vp = proj * view;
+    g_lastVP = vp;
+    g_lastVPValid = true;
     Frustum fr = make_frustum(vp);
     Vec3 fwd = game_cam_forward(g);
     Vec3 right = normalize(cross(fwd, Vec3(0, 1, 0)));
@@ -838,6 +885,8 @@ void render_frame(Game& g, int fbW, int fbH, const RenderSettings& rs, float dt)
     Vec3 fogCol = lerp(Vec3(0.019f, 0.026f, 0.036f), Vec3(0.30f, 0.30f, 0.31f), dawn);
     float fogDen = lerpf(0.0205f, 0.006f, g.indoor) * (1.0f - 0.25f * dawn);
     if (g.appMode == AM_TITLE) fogDen = 0.016f;
+    bool fullBright = rs.fullBright && g.appMode == AM_PLAY;
+    if (fullBright) { fogDen *= 0.12f; fogCol = fogCol * 2.6f; }
     Vec3 ambSky = lerp(Vec3(0.016f, 0.021f, 0.030f), Vec3(0.26f, 0.26f, 0.27f), dawn) * (1.0f - 0.45f * g.indoor);
     Vec3 ambGnd = lerp(Vec3(0.007f, 0.007f, 0.008f), Vec3(0.10f, 0.095f, 0.09f), dawn) * (1.0f - 0.3f * g.indoor);
     Vec3 lightDir = normalize(Vec3(0.3f, 0.82f, -0.5f));
@@ -864,7 +913,7 @@ void render_frame(Game& g, int fbW, int fbH, const RenderSettings& rs, float dt)
         p.f4("uLightning", lightDir.x, lightDir.y, lightDir.z, lightning);
         p.f4("uFog", fogCol.x, fogCol.y, fogCol.z, fogDen);
         p.f4("uMisc", t, g.rain, (float)M_NOISE, exposure);
-        p.f4("uMisc2", 0.7f / (float)std::max(1, g_shadowSize), g_fullbright, 0, 0);
+        p.f4("uMisc2", 0.7f / (float)std::max(1, g_shadowSize), std::max(g_fullbright, fullBright ? 1.0f : 0.0f), 0, 0);
     };
 
     // --- visibility + light lists ---
@@ -1120,6 +1169,39 @@ void render_frame(Game& g, int fbW, int fbH, const RenderSettings& rs, float dt)
         glDrawElements(GL_TRIANGLES, RAIN_N * 6, GL_UNSIGNED_SHORT, nullptr);
         g_stats.drawCalls++;
     }
+    // monster ESP: the parts of the Rigger hidden behind something, drawn as a glowing silhouette
+    if (rs.espMonster && g.appMode == AM_PLAY && g.rig.state != RS_DORMANT) {
+        Vec3 c;
+        switch (g.rig.state) {
+        case RS_CHASE: case RS_FINALE: c = Vec3(1.0f, 0.18f, 0.12f); break;
+        case RS_INVESTIGATE: case RS_SEARCH: c = Vec3(1.0f, 0.55f, 0.12f); break;
+        case RS_STARE: c = Vec3(0.75f, 0.35f, 1.0f); break;
+        case RS_STATUE: c = Vec3(0.7f, 0.7f, 0.7f); break;
+        default: c = Vec3(1.0f, 0.85f, 0.3f); break;
+        }
+        g_xray.use();
+        g_xray.m4("uViewProj", vp);
+        g_xray.v3("uCamPos", g.camPos);
+        g_xray.f4("uColor", c.x, c.y, c.z, 0.85f);
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthFunc(GL_GREATER);
+        glBindVertexArray(g_vaoDyn);
+        for (int i = DY_RIG_FIRST; i <= DY_RIG_LAST; i++) {
+            const DynObj& d = w.dyn[(size_t)i];
+            if (!d.visible || d.mesh < 0) continue;
+            const DynMesh& dm = w.dynMeshes[(size_t)d.mesh];
+            float nm[9];
+            gfx_normal_matrix(d.xf, nm);
+            g_xray.m4("uModel", d.xf);
+            g_xray.m3("uNormalMat", nm);
+            for (int pass = 0; pass < PASS_COUNT; pass++) {
+                if (!dm.count[pass] || pass == PASS_DECAL) continue;
+                glDrawElements(GL_TRIANGLES, (GLsizei)dm.count[pass], GL_UNSIGNED_INT, (void*)(size_t)(dm.first[pass] * 4));
+                g_stats.drawCalls++;
+            }
+        }
+        glDepthFunc(GL_LEQUAL);
+    }
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
 
@@ -1135,6 +1217,7 @@ void render_frame(Game& g, int fbW, int fbH, const RenderSettings& rs, float dt)
     g_post.f4("uP0", std::fmod(t, 600.0f), g.fear, g.interference, saturate(g.fade));
     g_post.f4("uP1", g.flash, g.damage + (g.pstate == PS_DEAD ? saturate(g.deadT) : 0.0f), 0.055f, 1.0f / (float)std::max(1, fbH / 3));
     g_post.f4("uP2", dawn, hide, g.pstate == PS_DEAD ? 1.0f : 0.0f, aspect);
+    g_post.f4("uP3", fullBright ? 1.0f : 0.0f, 0, 0, 0);
     glBindVertexArray(g_vaoEmpty);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     g_stats.drawCalls++;

@@ -27,6 +27,21 @@ static bool player_exposed(const Game& g) {
     return g.pstate == PS_NORMAL || g.pstate == PS_LADDER || g.pstate == PS_DEAD;
 }
 
+// How far away it can make the player out: depends on how much light the player is
+// carrying or standing in, how loud they are, and whether it is already hunting.
+float rigger_sight_range(const Game& g) {
+    float range = g.crouched ? 6.0f : 9.5f;
+    if (g.flashOn && g.have[IT_FLASHLIGHT]) range = 25.0f;
+    else if (g.flags[F_GEN_RUNNING] && g.indoor < 0.5f) range += 7.0f;      // the yard lamps
+    else if (g.flags[F_GEN_RUNNING]) range += 4.0f;
+    if (g.noise > 12.0f) range += 4.0f;
+    if (g.difficulty == 2) range *= 1.2f;
+    if (g.difficulty == 0) range *= 0.85f;
+    if (g.rig.state == RS_CHASE) range = std::max(range, 16.0f) * 1.2f;
+    return range;
+}
+float rigger_hearing_mult(const Game& g) { return hear_mul(g); }
+
 static bool can_see_player(const Game& g, float* distOut) {
     const Rigger& r = g.rig;
     if (!player_exposed(g)) return false;
@@ -35,21 +50,19 @@ static bool can_see_player(const Game& g, float* distOut) {
     Vec3 d = tgt - eye;
     float dist = length(d);
     if (distOut) *distOut = dist;
-    // how far it can see depends on how much light the player is carrying or standing in
-    float range = g.crouched ? 6.0f : 9.5f;
-    if (g.flashOn && g.have[IT_FLASHLIGHT]) range = 25.0f;
-    else if (g.flags[F_GEN_RUNNING] && g.indoor < 0.5f) range += 7.0f;      // the yard lamps
-    else if (g.flags[F_GEN_RUNNING]) range += 4.0f;
-    if (g.noise > 12.0f) range += 4.0f;
-    if (g.difficulty == 2) range *= 1.2f;
-    if (g.difficulty == 0) range *= 0.85f;
-    if (r.state == RS_CHASE) range = std::max(range, 16.0f) * 1.2f;
+    float range = rigger_sight_range(g);
     if (dist > range) return false;
     // field of view (it sees all round at arm's length)
     Vec3 f(std::sin(r.yaw + r.headYaw), 0, std::cos(r.yaw + r.headYaw));
     Vec3 dn = normalize(Vec3(d.x, 0, d.z));
     if (dist > 2.5f && dot(f, dn) < 0.4f) return false;
     return g.w.lineOfSight(eye, tgt, COL_SIGHT);
+}
+
+bool rigger_sees_player(const Game& g) {
+    const Rigger& r = g.rig;
+    if (r.state == RS_DORMANT || r.state == RS_STATUE || r.grace > 0) return false;
+    return can_see_player(g, nullptr);
 }
 
 void alert_noise(Game& g, const Vec3& pos, float radius) {

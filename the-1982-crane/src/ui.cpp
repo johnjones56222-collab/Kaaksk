@@ -4,6 +4,7 @@
 #include "game.h"
 #include "audio.h"
 #include "platform.h"
+#include "render.h"
 
 void InputState::endFrame() {
     for (int i = 0; i < K_COUNT; i++) pressed[i] = false;
@@ -348,7 +349,7 @@ bool in_bar(float x, float y, const Bar& b) { return b.show && x >= b.x - 10 * U
 // Menu state
 // ---------------------------------------------------------------------------
 enum TitlePage { TP_GATE = 0, TP_MAIN, TP_NEW, TP_CONFIRM, TP_SETTINGS, TP_HELP };
-enum PausePage { PP_MAIN = 0, PP_SETTINGS, PP_HELP, PP_QUIT };
+enum PausePage { PP_MAIN = 0, PP_SETTINGS, PP_HELP, PP_QUIT, PP_ASSIST };
 int g_titlePage = TP_GATE;
 int g_pausePage = PP_MAIN;
 float g_titleT = 0;
@@ -365,6 +366,9 @@ std::vector<std::string> g_lines;
 Controls g_pending;
 bool g_hasPending = false;
 
+const int SETTINGS_ROWS = 15;
+float g_assistMsgT = 0;
+std::string g_assistMsg;
 const char* DIFF_NAME[3] = {"STORY", "STANDARD", "NIGHTMARE"};
 const char* DIFF_DESC[3] = {"More battery life. It is slower, hears less, and gives up sooner. For the story.",
                             "The shift as intended. Keep to the dark. Hide when it hunts.",
@@ -376,8 +380,9 @@ const char* DIFF_DESC[3] = {"More battery life. It is slower, hears less, and gi
 // Settings persistence
 // ---------------------------------------------------------------------------
 std::string settings_to_string(const Settings& s) {
-    return strf("sens=%.3f;tsens=%.3f;inv=%d;q=%d;scale=%.3f;bri=%.3f;vol=%.3f;txt=%d;bob=%d;fps=%d", s.lookSens, s.touchSens, s.invertY ? 1 : 0, s.quality,
-                s.renderScale, s.brightness, s.volume, s.textSize, s.headBob ? 1 : 0, s.showFps ? 1 : 0);
+    return strf("sens=%.3f;tsens=%.3f;inv=%d;q=%d;scale=%.3f;bri=%.3f;vol=%.3f;txt=%d;bob=%d;fps=%d;fb=%d;espm=%d;espq=%d;espi=%d", s.lookSens, s.touchSens,
+                s.invertY ? 1 : 0, s.quality, s.renderScale, s.brightness, s.volume, s.textSize, s.headBob ? 1 : 0, s.showFps ? 1 : 0, s.fullBright ? 1 : 0,
+                s.espMonster ? 1 : 0, s.espMission ? 1 : 0, s.espItems ? 1 : 0);
 }
 void settings_from_string(Settings& s, const std::string& str) {
     size_t p = 0;
@@ -400,6 +405,10 @@ void settings_from_string(Settings& s, const std::string& str) {
         else if (k == "txt") s.textSize = clampv((int)v, 0, 2);
         else if (k == "bob") s.headBob = v != 0;
         else if (k == "fps") s.showFps = v != 0;
+        else if (k == "fb") s.fullBright = v != 0;
+        else if (k == "espm") s.espMonster = v != 0;
+        else if (k == "espq") s.espMission = v != 0;
+        else if (k == "espi") s.espItems = v != 0;
     }
 }
 
@@ -500,6 +509,18 @@ void ui_gather(Game& g, Settings& s, InputState& in, Controls& c, float dt) {
             }
             c.journal = kp(K_TAB) || kp(K_J) || kp(K_I) || kp(K_M);
             c.pause = kp(K_ESC) || kp(K_P);
+            // assist toggles on the number row
+            {
+                bool* opt[4] = {&s.fullBright, &s.espMonster, &s.espMission, &s.espItems};
+                static const char* nm[4] = {"Full bright", "Monster ESP", "Mission ESP", "Item ESP"};
+                for (int i = 0; i < 4; i++)
+                    if (kp(K_0 + 1 + i)) {
+                        *opt[i] = !*opt[i];
+                        g_assistMsg = std::string(nm[i]) + (*opt[i] ? "  ON" : "  OFF");
+                        g_assistMsgT = 2.0f;
+                        audio_play(S_UI, 0.35f, *opt[i] ? 1.7f : 1.3f);
+                    }
+            }
             // mouse look (pointer locked) and click-to-use
             if (in.locked) {
                 c.lookDX = in.mdx * 0.0022f * s.lookSens;
@@ -745,6 +766,16 @@ void draw_settings(Settings& s, float x, float y, float w, InputState& in, bool 
     yy += rh;
     if (toggleRow("Show frame rate", s.showFps ? "ON" : "OFF", x, yy, w, rh)) s.showFps = !s.showFps;
     yy += rh;
+    text(FONT_SANS, "ASSIST", x, yy + rh * 0.7f, 13.0f * TK, col(C_AMBER), 0, 2.0f * U);
+    yy += rh;
+    if (toggleRow("Full bright  [1]", s.fullBright ? "ON" : "OFF", x, yy, w, rh)) s.fullBright = !s.fullBright;
+    yy += rh;
+    if (toggleRow("Monster ESP  [2]", s.espMonster ? "ON" : "OFF", x, yy, w, rh)) s.espMonster = !s.espMonster;
+    yy += rh;
+    if (toggleRow("Mission ESP  [3]", s.espMission ? "ON" : "OFF", x, yy, w, rh)) s.espMission = !s.espMission;
+    yy += rh;
+    if (toggleRow("Item ESP  [4]", s.espItems ? "ON" : "OFF", x, yy, w, rh)) s.espItems = !s.espItems;
+    yy += rh;
     (void)inGame;
 }
 
@@ -867,13 +898,13 @@ void draw_title(Game& g, Settings& s, InputState& in, float dt) {
     } else if (g_titlePage == TP_SETTINGS) {
         g_fsRect[0] = -1;
         float pw = std::min(g_W - 24.0f * U, 520.0f * U);
-        float ph = std::min(g_H - by - 10.0f * U, 40.0f * U * 10 + 90.0f * U);
+        float ph = std::min(g_H - by - 10.0f * U, 40.0f * U * SETTINGS_ROWS + 90.0f * U);
         float py = std::max(10.0f * U, std::min(by - 10.0f * U, g_H - ph - 10.0f * U));
         if (ph < 300.0f * U) { py = 10.0f * U; ph = g_H - 20.0f * U; }
         panel(cx - pw * 0.5f, py, pw, ph);
         static float scroll = 0;
         float innerH = ph - 76.0f * U;
-        float contentH = 40.0f * U * 10;
+        float contentH = 40.0f * U * SETTINGS_ROWS;
         u32 id = hid("settings-scroll", 0, 0);
         if (g_ptr.pressed && inside(g_ptr.x, g_ptr.y, cx - pw * 0.5f, py, pw * 0.36f, ph)) { g_dragId = id; g_dragLast = g_ptr.y; }
         if (g_dragId == id && g_ptr.down) { scroll -= g_ptr.y - g_dragLast; g_dragLast = g_ptr.y; }
@@ -1231,7 +1262,7 @@ void draw_pause(Game& g, Settings& s, InputState& in) {
     float bw = std::min(g_W - 40.0f * U, 320.0f * U), bh = 46.0f * U, gap = 10.0f * U;
     float bx = cx - bw * 0.5f;
     if (g_pausePage == PP_MAIN) {
-        float by = std::max(20.0f * U, g_H * 0.5f - (bh + gap) * 2.6f);
+        float by = std::max(20.0f * U, g_H * 0.5f - (bh + gap) * 3.1f);
         text(FONT_SANS, "PAUSED", cx, by - 4 * U, 26.0f * TK, col(C_INK), 1, 6.0f * U);
         text(FONT_MONO, stage_title(g), cx, by + 22 * U, 12.0f * TK, col(C_DIM), 1);
         by += 40 * U;
@@ -1240,6 +1271,8 @@ void draw_pause(Game& g, Settings& s, InputState& in) {
         by += bh + gap;
         if (button("JOURNAL", bx, by, bw, bh)) { g.modal = MD_JOURNAL; g.noteScroll = 0; }
         by += bh + gap;
+        if (button("ASSIST", bx, by, bw, bh)) g_pausePage = PP_ASSIST;
+        by += bh + gap;
         if (button("SETTINGS", bx, by, bw, bh)) g_pausePage = PP_SETTINGS;
         by += bh + gap;
         if (button("HOW TO PLAY", bx, by, bw, bh)) g_pausePage = PP_HELP;
@@ -1247,11 +1280,11 @@ void draw_pause(Game& g, Settings& s, InputState& in) {
         if (button("QUIT TO TITLE", bx, by, bw, bh)) g_pausePage = PP_QUIT;
     } else if (g_pausePage == PP_SETTINGS) {
         float pw = std::min(g_W - 24.0f * U, 520.0f * U);
-        float ph = std::min(g_H - 20.0f * U, 40.0f * U * 10 + 90.0f * U);
+        float ph = std::min(g_H - 20.0f * U, 40.0f * U * SETTINGS_ROWS + 90.0f * U);
         float py = (g_H - ph) * 0.5f;
         panel(cx - pw * 0.5f, py, pw, ph);
         static float scroll = 0;
-        float innerH = ph - 76.0f * U, contentH = 40.0f * U * 10;
+        float innerH = ph - 76.0f * U, contentH = 40.0f * U * SETTINGS_ROWS;
         u32 id = hid("pause-settings-scroll", 0, 0);
         if (g_ptr.pressed && inside(g_ptr.x, g_ptr.y, cx - pw * 0.5f, py, pw * 0.36f, ph)) { g_dragId = id; g_dragLast = g_ptr.y; }
         if (g_dragId == id && g_ptr.down) { scroll -= g_ptr.y - g_dragLast; g_dragLast = g_ptr.y; }
@@ -1269,6 +1302,26 @@ void draw_pause(Game& g, Settings& s, InputState& in) {
         static float scroll = 0;
         draw_scroll_text(FONT_SANS, h, cx - pw * 0.5f + 22 * U, py + 18 * U, pw - 56 * U, ph - 90 * U, 14.5f * TK, col(C_INK), scroll, in);
         if (button("BACK", cx - 80 * U, py + ph - 56 * U, 160 * U, 42 * U, true, true)) g_pausePage = PP_MAIN;
+    } else if (g_pausePage == PP_ASSIST) {
+        float pw = std::min(g_W - 24.0f * U, 560.0f * U);
+        float rh = std::min(54.0f * U, (g_H - 140.0f * U) / 4.6f);
+        float ph = rh * 4 + 130.0f * U;
+        float px = cx - pw * 0.5f, py = std::max(8.0f, (g_H - ph) * 0.5f);
+        panel(px, py, pw, ph);
+        text(FONT_SANS, "ASSIST", cx, py + 28 * U, 18.0f * TK, col(C_AMBER), 1, 4.0f * U);
+        struct Opt { bool* v; const char* name; const char* desc; };
+        Opt opts[4] = {{&s.fullBright, "Full bright", "Light everything evenly and thin the fog."},
+                       {&s.espMonster, "Monster ESP", "See the Rigger through walls, what it is doing, and what it can see."},
+                       {&s.espMission, "Mission ESP", "Mark where the current objective needs you to go."},
+                       {&s.espItems, "Item ESP", "Mark items, batteries, tapes, documents and hiding lockers."}};
+        float yy = py + 46 * U;
+        for (int i = 0; i < 4; i++) {
+            std::string label = in.touchMode ? std::string(opts[i].name) : strf("%s  [%d]", opts[i].name, i + 1);
+            if (toggleRow(label.c_str(), *opts[i].v ? "ON" : "OFF", px + 22 * U, yy, pw - 44 * U, rh * 0.62f)) *opts[i].v = !*opts[i].v;
+            text(FONT_SANS, opts[i].desc, px + 22 * U, yy + rh * 0.86f, 12.0f * TK, col(C_DIM));
+            yy += rh;
+        }
+        if (button("DONE", cx - 80 * U, py + ph - 54 * U, 160 * U, 42 * U, true, true)) g_pausePage = PP_MAIN;
     } else if (g_pausePage == PP_QUIT) {
         float by = g_H * 0.5f - 70 * U;
         text(FONT_SANS, "Quit to the title screen?", cx, by, 18.0f * TK, col(C_INK), 1);
@@ -1285,6 +1338,328 @@ void draw_pause(Game& g, Settings& s, InputState& in) {
     if (in.pressed[K_BACK] && g_pausePage != PP_MAIN) g_pausePage = PP_MAIN;
 }
 
+// --------------------------------------------------------------------------- assist overlays (ESP)
+struct EspTarget { Vec3 p; std::string label; };
+
+Vec3 interact_world(const World& w, int idx) {
+    if (idx < 0) return Vec3();
+    const Interact& it = w.interacts[(size_t)idx];
+    Vec3 c = it.box.center();
+    return it.xfDyn >= 0 ? w.dyn[(size_t)it.xfDyn].xf.point(c) : c;
+}
+Vec3 item_world(const World& w, int item) {
+    if (w.itemDyn[item] >= 0) return w.dyn[(size_t)w.itemDyn[item]].xf.point(Vec3(0, 0.05f, 0));
+    return w.itemPos[item];
+}
+
+// Where the current objective needs the player next (the same logic a careful player would follow).
+void objective_targets(const Game& g, std::vector<EspTarget>& out) {
+    out.clear();
+    const World& w = g.w;
+    auto item = [&](int it, const char* name) { if (!g.itemTaken[it] && w.itemInteract[it] >= 0 && w.interacts[(size_t)w.itemInteract[it]].enabled) out.push_back({item_world(w, it), name}); };
+    auto use = [&](int u, const char* name) { out.push_back({interact_world(w, w.useInteract[u]), name}); };
+    auto note = [&](int n, const char* name) { out.push_back({w.noteInteract[n] >= 0 ? interact_world(w, w.noteInteract[n]) : w.notePos[n], name}); };
+    int held = (g.have[IT_FUSE_A] ? 1 : 0) + (g.have[IT_FUSE_B] ? 1 : 0) + (g.have[IT_FUSE_C] ? 1 : 0);
+    switch (g.stage) {
+    case ST_FLASHLIGHT: item(IT_FLASHLIGHT, "Flashlight"); break;
+    case ST_BOOTH:
+        if (!g.flags[F_LOG_READ]) note(N_DUTY_LOG, "Gate log");
+        item(IT_RADIO, "Radio handset");
+        break;
+    case ST_GATE: use(U_GATE_LEVER, "Gate release"); break;
+    case ST_OFFICE_GO: note(N_OFFICE_DOOR, "Site office"); break;
+    case ST_OFFICE_KEY: item(IT_OFFICE_KEY, "Office key (Dale's locker)"); break;
+    case ST_OFFICE_ENTER:
+        if (!g.flags[F_OFFICE_UNLOCKED]) out.push_back({w.doorPos[D_OFFICE], "Office door"});
+        note(N_INCIDENT, "Incident report");
+        break;
+    case ST_POWER:
+        item(IT_FUSE_A, "Fuse");
+        item(IT_FUSE_B, "Fuse");
+        item(IT_FUSE_C, "Fuse");
+        if (held > 0) use(U_FUSEBOX, "Fuse panel");
+        if (!g.have[IT_JERRYCAN] && !g.flags[F_GEN_FUELED]) item(IT_JERRYCAN, "Jerry can");
+        if (g.have[IT_JERRYCAN] && !g.flags[F_CAN_FULL] && !g.flags[F_GEN_FUELED]) use(U_FUEL_TAP, "Diesel pump");
+        if (g.flags[F_CAN_FULL] && !g.flags[F_GEN_FUELED]) use(U_GEN_FUEL, "Generator tank");
+        if (g.fusesInstalled >= 3 && g.flags[F_GEN_FUELED]) use(U_GEN_START, "Start lever");
+        break;
+    case ST_KEYCAB:
+        if (!g.noteRead[N_TIMECARD]) note(N_TIMECARD, "Walt's time card");
+        if (!g.flags[F_KEYCAB_OPEN]) use(U_KEYPAD, "Key cabinet");
+        else item(IT_CRANE_KEY, "Crane key");
+        break;
+    case ST_BRAKE:
+        if (!g.have[IT_CUTTERS]) item(IT_CUTTERS, "Bolt cutters");
+        if (!g.flags[F_VALVES_DONE]) {
+            static const int order[3] = {U_VALVE_C, U_VALVE_A, U_VALVE_B};
+            static const char* names[3] = {"Valve C (first)", "Valve A (second)", "Valve B (third)"};
+            int step = clampv(g.valveStep, 0, 2);
+            use(order[step], names[step]);
+        } else if (!g.flags[F_LOTO_CUT]) use(U_LOTO, g.have[IT_CUTTERS] ? "Cut the lockout" : "Lockout");
+        else if (!g.flags[F_PUMP_ON]) use(U_BREAKER, g.flags[F_DRAINED] ? "Pump starter" : "Pump starter (wait for the water)");
+        if (g.flags[F_PUMP_ON]) use(U_STORMLOCK, "Slew lock");
+        break;
+    case ST_CLIMB: {
+        if (!g.flags[F_CRANE_GATE_UNLOCKED]) { out.push_back({w.doorPos[D_CRANE_GATE], "Ladder cage"}); break; }
+        static const float levels[6] = {0.0f, 7.2f, 13.0f, 19.0f, 25.0f, CRANE_TOP_Y};
+        int lvl = 0;
+        for (int i = 0; i < 6; i++)
+            if (g.pos.y > levels[i] - 0.6f) lvl = i;
+        if (lvl < LAD_COUNT) out.push_back({w.ladders[lvl].bottom + Vec3(0, 1.2f, 0), lvl == 0 ? "Ladder" : "Next ladder"});
+        else use(U_CAB_DOOR, "Cab door");
+        break;
+    }
+    case ST_CAB:
+        if (!g.flags[F_WALT_READ]) note(N_WALT_FINAL, "Walt's log");
+        use(U_CAB_CONTROLS, "Controls");
+        break;
+    case ST_LOAD:
+        if (g.pstate != PS_OPERATING) use(U_CAB_CONTROLS, "Controls");
+        out.push_back({CRANE_POS + Vec3(0, WATER_Y, -26.0f), "Put it back: under the water"});
+        out.push_back({pad_pos() + Vec3(0, 0.2f, 0), "Land it: the hatch marks"});
+        break;
+    case ST_ESCAPE:
+        if (g.pstate == PS_SEATED) use(U_CAB_LEAVE, "Cab door");
+        else if (g.pos.y > 1.0f) {
+            static const float levels[6] = {0.0f, 7.2f, 13.0f, 19.0f, 25.0f, CRANE_TOP_Y};
+            int lvl = 0;
+            for (int i = 0; i < 6; i++)
+                if (g.pos.y > levels[i] - 0.6f) lvl = i;
+            if (lvl > 0) out.push_back({w.ladders[lvl - 1].top + Vec3(0, 1.0f, 0), "Ladder down"});
+        } else if (g.pos.z < 56.0f && !g.events[EV_GATE_SLAM]) out.push_back({Vec3(0, 1.4f, 56.0f), "The gate"});
+        else use(U_TRUCK, "Your truck");
+        break;
+    case ST_OPEN:
+        if (g.pstate == PS_SEATED) use(U_CAB_LEAVE, "Cab door");
+        else use(U_LOAD_DOOR, "The container door");
+        break;
+    default: break;
+    }
+}
+
+// screen space already claimed by ESP labels this frame (labels that would overlap are dropped)
+struct LRect { float x0, y0, x1, y1; };
+std::vector<LRect> g_labels;
+LRect g_avoid = {0, 0, 0, 0};
+bool claim(float x0, float y0, float x1, float y1) {
+    for (const LRect& r : g_labels)
+        if (x0 < r.x1 && x1 > r.x0 && y0 < r.y1 && y1 > r.y0) return false;
+    if (x0 < g_avoid.x1 && x1 > g_avoid.x0 && y0 < g_avoid.y1 && y1 > g_avoid.y0) return false;
+    g_labels.push_back({x0, y0, x1, y1});
+    return true;
+}
+
+// a world-anchored marker: diamond, label and distance; off-screen ones become an arrow at the edge
+void esp_marker(const Game& g, const Vec3& p, const std::string& label, u32 color, float size, bool edgeArrow, float alpha) {
+    float sx, sy;
+    bool front = render_project(p, g_W, g_H, sx, sy);
+    float dist = length(p - g.camPos);
+    float m = 34.0f * U;
+    bool onScreen = front && sx > m && sx < g_W - m && sy > m && sy < g_H - m;
+    if (onScreen && sx > g_avoid.x0 && sx < g_avoid.x1 && sy > g_avoid.y0 && sy < g_avoid.y1) return; // under the Rigger panel
+    if (onScreen) {
+        float r = size * U;
+        for (const LRect& lr : g_labels)
+            if (sx + r > lr.x0 && sx - r < lr.x1 && sy + r > lr.y0 && sy - r < lr.y1) return; // something more important is here
+        u32 c = col(color, alpha);
+        tri(sx, sy - r, sx + r, sy, sx, sy + r, c);
+        tri(sx, sy - r, sx, sy + r, sx - r, sy, c);
+        float rr = r + 2.5f * U;
+        line(sx, sy - rr, sx + rr, sy, 1.5f * U, col(0x000000, alpha * 0.7f));
+        line(sx + rr, sy, sx, sy + rr, 1.5f * U, col(0x000000, alpha * 0.7f));
+        line(sx, sy + rr, sx - rr, sy, 1.5f * U, col(0x000000, alpha * 0.7f));
+        line(sx - rr, sy, sx, sy - rr, 1.5f * U, col(0x000000, alpha * 0.7f));
+        float ts = (size > 6.0f ? 13.0f : 11.0f) * TK;
+        float lw = textW(FONT_SANS, label, ts) * 0.5f + 3.0f;
+        float ly = sy - r - 6.0f * U;
+        if (claim(sx - lw, ly - ts, sx + lw, sy + r + ts * 1.15f)) {
+            textShadow(FONT_SANS, label, sx, ly, ts, col(color, alpha), 1);
+            textShadow(FONT_MONO, strf("%.0f m", dist), sx, sy + r + ts * 1.05f, ts * 0.85f, col(0xd8d2bf, alpha * 0.85f), 1);
+        }
+        return;
+    }
+    if (!edgeArrow) return;
+    float cx = g_W * 0.5f, cy = g_H * 0.5f;
+    float dx = sx - cx, dy = sy - cy;
+    float l = std::sqrt(dx * dx + dy * dy);
+    if (l < 1e-3f) { dx = 0; dy = -1; l = 1; }
+    dx /= l; dy /= l;
+    float t = std::min((g_W * 0.5f - m) / std::max(std::fabs(dx), 1e-3f), (g_H * 0.5f - m) / std::max(std::fabs(dy), 1e-3f));
+    float ax = cx + dx * t, ay = cy + dy * t;
+    // keep clear of the Rigger panel in the top-right corner
+    if (ax > g_avoid.x0 - 20.0f * U && ay < g_avoid.y1 + 20.0f * U && g_avoid.x1 > 0) { ax = g_W - m; ay = g_avoid.y1 + 30.0f * U; dx = 1; dy = 0; }
+    float r = 11.0f * U;
+    float px = -dy, py = dx;
+    tri(ax + dx * r, ay + dy * r, ax - dx * r * 0.6f + px * r * 0.8f, ay - dy * r * 0.6f + py * r * 0.8f, ax - dx * r * 0.6f - px * r * 0.8f,
+        ay - dy * r * 0.6f - py * r * 0.8f, col(color, alpha));
+    float ts = 11.0f * TK;
+    std::string lb = label + strf("  %.0f m", dist);
+    float tw = textW(FONT_SANS, lb, ts);
+    // label sits beside the arrow, on the screen side, never on top of it
+    float lx = clampv(ax - dx * (tw * 0.5f + r + 8.0f * U), tw * 0.5f + 6.0f, g_W - tw * 0.5f - 6.0f);
+    float ly = clampv(ay - dy * (ts + r + 4.0f * U) + ts * 0.35f, ts + 4.0f, g_H - 6.0f);
+    // slide along the edge until the label has room
+    for (int k = 0; k < 6; k++) {
+        if (claim(lx - tw * 0.5f - 2.0f, ly - ts, lx + tw * 0.5f + 2.0f, ly + 3.0f)) {
+            textShadow(FONT_SANS, lb, lx, ly, ts, col(color, alpha * 0.95f), 1);
+            return;
+        }
+        float step = ts * 1.35f;
+        if (std::fabs(dx) > std::fabs(dy)) ly = clampv(ly + step, ts + 4.0f, g_H - 6.0f); else lx = clampv(lx + tw * 0.6f, tw * 0.5f + 6.0f, g_W - tw * 0.5f - 6.0f);
+    }
+}
+
+const char* rig_state_name(const Rigger& r) {
+    switch (r.state) {
+    case RS_DORMANT: return "DORMANT";
+    case RS_PATROL: return "PATROLLING";
+    case RS_INVESTIGATE: return "INVESTIGATING A NOISE";
+    case RS_CHASE: return "HUNTING YOU";
+    case RS_SEARCH: return "SEARCHING FOR YOU";
+    case RS_STARE: return "WATCHING (WILL NOT FOLLOW)";
+    case RS_FINALE: return "HUNTING YOU";
+    case RS_STATUE: return "STANDING STILL";
+    default: return "";
+    }
+}
+u32 rig_state_color(const Rigger& r) {
+    switch (r.state) {
+    case RS_CHASE: case RS_FINALE: return 0xff4a36;
+    case RS_INVESTIGATE: case RS_SEARCH: return 0xffa040;
+    case RS_STARE: return 0xc890ff;
+    case RS_STATUE: case RS_DORMANT: return 0xb8b4a8;
+    default: return 0xffd860;
+    }
+}
+
+void draw_esp(Game& g, Settings& s, InputState& in) {
+    const World& w = g.w;
+    bool touch = in.touchMode;
+    g_labels.clear();
+    // the Rigger's panel sits in the top-right corner (compact on touch screens, between the
+    // LOG / pause buttons and the USE button); everything else keeps clear of it
+    bool compact = touch;
+    float pts = (compact ? 10.5f : 12.0f) * TK, plh = pts * (compact ? 1.35f : 1.45f);
+    float pw = (compact ? 250.0f : 268.0f) * U, ph = compact ? plh * 4.0f + 10.0f * U : 112.0f * U;
+    float px = g_W - pw - 12.0f * U, py = touch ? 62.0f * U : 12.0f * U;
+    g_avoid = s.espMonster ? LRect{px, py, px + pw, py + ph} : LRect{0, 0, 0, 0};
+    // ---- the Rigger ----
+    if (s.espMonster) {
+        const Rigger& r = g.rig;
+        u32 rc = rig_state_color(r);
+        Vec3 where = r.pos;
+        bool dormant = r.state == RS_DORMANT;
+        if (dormant) where = w.dyn[DY_CRANE_TOP].xf.point(Vec3(3.8f, 32.4f, 0)); // waiting in the cab
+        float dist = length(where - g.pos);
+        // its route
+        if (!dormant && r.pathIdx < r.path.size() && (r.state == RS_PATROL || r.state == RS_INVESTIGATE || r.state == RS_SEARCH || r.state == RS_CHASE || r.state == RS_FINALE)) {
+            Vec3 prev = r.pos + Vec3(0, 0.08f, 0);
+            for (size_t i = r.pathIdx; i < r.path.size(); i++) {
+                Vec3 nx = r.path[i] + Vec3(0, 0.08f, 0);
+                float ax, ay, bx, by;
+                bool fa = render_project(prev, g_W, g_H, ax, ay), fb = render_project(nx, g_W, g_H, bx, by);
+                if (fa && fb) line(ax, ay, bx, by, 2.0f * U, col(rc, 0.55f));
+                prev = nx;
+            }
+            float ex, ey;
+            if (render_project(prev, g_W, g_H, ex, ey)) ring(ex, ey, 6.0f * U, 2.0f * U, col(rc, 0.7f), 16);
+        }
+        // bracket around it, or an arrow toward it
+        float fx, fy, hx, hy;
+        bool f1 = render_project(where, g_W, g_H, fx, fy);
+        bool f2 = render_project(where + Vec3(0, dormant ? 1.0f : 2.15f, 0), g_W, g_H, hx, hy);
+        float m = 30.0f * U;
+        if (f1 && f2 && fx > m && fx < g_W - m && hy > 0 && fy < g_H) {
+            float hgt = std::max(18.0f * U, fy - hy), wid = hgt * 0.5f;
+            float x0 = fx - wid * 0.5f, y0 = hy, x1 = fx + wid * 0.5f, y1 = fy;
+            float k = std::min(wid, hgt) * 0.3f, t = 2.0f * U;
+            u32 c = col(rc, 0.95f);
+            rect(x0, y0, k, t, c); rect(x0, y0, t, k, c); rect(x1 - k, y0, k, t, c); rect(x1 - t, y0, t, k, c);
+            rect(x0, y1 - t, k, t, c); rect(x0, y1 - k, t, k, c); rect(x1 - k, y1 - t, k, t, c); rect(x1 - t, y1 - k, t, k, c);
+            float ts = 12.0f * TK;
+            {
+                float lw = std::max(textW(FONT_SANS, "THE RIGGER", ts), textW(FONT_SANS, std::string(rig_state_name(r)) + "  000 m", ts * 0.85f)) * 0.5f + 4.0f;
+                g_labels.push_back({fx - lw, y0 - ts * 2.6f, fx + lw, y1});
+            }
+            textShadow(FONT_SANS, "THE RIGGER", fx, y0 - ts * 1.5f, ts, c, 1);
+            textShadow(FONT_SANS, strf("%s  %.0f m", rig_state_name(r), dist), fx, y0 - ts * 0.35f, ts * 0.85f, c, 1);
+        } else {
+            esp_marker(g, where + Vec3(0, 1.2f, 0), dormant ? "The Rigger (in the cab)" : "The Rigger", rc, 6.0f, true, 1.0f);
+        }
+        // behaviour readout
+        rect(px, py, pw, ph, col(0x000000, 0.55f));
+        rect(px, py, 3.0f * U, ph, col(rc));
+        float ts = pts, lh = plh;
+        float tx = px + 12.0f * U, ty = py + lh;
+        text(FONT_SANS, "THE RIGGER", tx, ty, ts * 0.8f, col(0xb8b4a8), 0, 2.0f * U);
+        text(FONT_SANS, rig_state_name(r), px + pw - 10.0f * U, ty, ts * 0.9f, col(rc), 2);
+        ty += lh;
+        std::string line1;
+        if (dormant) line1 = g.stage >= ST_CAB ? "Climbing the mast toward you" : (g.flags[F_GEN_RUNNING] ? "Waiting in the cab - the lights woke it" : "Waiting in the cab until the yard lights come on");
+        else line1 = strf("%.0f m away", dist) + (r.grace > 0 ? strf("  -  ignoring you for %.0f s", r.grace) : "");
+        if (dormant && g.stage == ST_LOAD && g.flags[F_OPERATED]) line1 = strf("On the mast: %.0f%% of the way up", saturate(g.crane.climb) * 100.0f);
+        if (!compact || dormant || r.state == RS_STATUE) {
+            text(FONT_SANS, line1, tx, ty, ts, col(0xe8e2d0));
+            ty += lh;
+        }
+        bool sees = rigger_sees_player(g);
+        if (!dormant && r.state != RS_STATUE) {
+            std::string seeTxt = sees ? "It can see you" : (g.pstate == PS_HIDING ? (r.sawPlayerHide ? "It saw you hide" : "It does not know you are hidden") : "It cannot see you");
+            if (compact) seeTxt = strf("%.0f m - ", dist) + seeTxt;
+            text(FONT_SANS, seeTxt, tx, ty, ts, col(sees || (g.pstate == PS_HIDING && r.sawPlayerHide) ? 0xff6a50 : 0x9fd8a0));
+            // suspicion bar
+            float bw = 70.0f * U, bx = px + pw - bw - 10.0f * U;
+            rect(bx, ty - ts * 0.6f, bw, 5.0f * U, col(0x3a3834));
+            float susp = (r.state == RS_CHASE || r.state == RS_FINALE) ? 1.0f : saturate(r.alert);
+            rect(bx, ty - ts * 0.6f, bw * susp, 5.0f * U, col(rc));
+            text(FONT_SANS, "alert", bx - 6.0f * U, ty, ts * 0.8f, col(0x8b877a), 2);
+            ty += lh;
+            float sight = rigger_sight_range(g);
+            float hear = g.noise * rigger_hearing_mult(g);
+            std::string why = g.flashOn ? "flashlight on" : (g.crouched ? "crouched in the dark" : (g.flags[F_GEN_RUNNING] && g.indoor < 0.5f ? "yard lamps lit" : "in the dark"));
+            text(FONT_SANS, strf("Sees you within %.0f m (%s)", sight, why.c_str()), tx, ty, ts * 0.88f, col(0xb8b4a8));
+            ty += lh * 0.9f;
+            if (r.grace > 0 && compact) text(FONT_SANS, strf("Ignoring you for %.0f s", r.grace), tx, ty, ts * 0.88f, col(0x9fd8a0));
+            else text(FONT_SANS, hear > 0.5f ? strf("Your last sound carried %.0f m", hear) : std::string("You are making no sound"), tx, ty, ts * 0.88f, col(0xb8b4a8));
+        } else {
+            text(FONT_SANS, dormant ? "It is not hunting yet" : "It is not moving", tx, ty, ts, col(0x9fd8a0));
+        }
+    }
+    // ---- mission ----
+    if (s.espMission) {
+        static std::vector<EspTarget> targets;
+        objective_targets(g, targets);
+        for (const EspTarget& t : targets) esp_marker(g, t.p, t.label, 0xffb030, 7.0f, true, 1.0f);
+    }
+    // ---- items: pickups, batteries, tapes, documents, hiding lockers (nearest first) ----
+    if (s.espItems) {
+        struct It { float d; Vec3 p; std::string name; u32 c; float size, maxD; };
+        static std::vector<It> list;
+        list.clear();
+        for (int i = 0; i < IT_COUNT; i++) {
+            if (g.itemTaken[i] || w.itemInteract[i] < 0 || !w.interacts[(size_t)w.itemInteract[i]].enabled) continue;
+            Vec3 p = item_world(w, i);
+            u32 c = i >= IT_BATT1 ? 0x7fdc8a : (i >= IT_TAPE1 && i <= IT_TAPE6) ? 0x8ac4ff : 0xffd860;
+            const char* nm = i >= IT_BATT1 ? "Batteries" : (i >= IT_TAPE1 && i <= IT_TAPE6) ? "Tape" : item_name(i);
+            list.push_back({length(p - g.camPos), p, nm, c, 5.0f, 70.0f});
+        }
+        for (int n = 0; n < N_COUNT; n++) {
+            if (g.noteRead[n] || w.noteInteract[n] < 0 || !w.interacts[(size_t)w.noteInteract[n]].enabled) continue;
+            Vec3 p = interact_world(w, w.noteInteract[n]);
+            list.push_back({length(p - g.camPos), p, note_title(n), 0xe8e2d0, 4.5f, 55.0f});
+        }
+        for (int h = 0; h < HIDE_COUNT; h++) {
+            Vec3 p = w.hides[h].outside + Vec3(0, 1.2f, 0);
+            list.push_back({length(p - g.camPos), p, "Hiding locker", 0x9a9a90, 4.0f, 22.0f});
+        }
+        std::sort(list.begin(), list.end(), [](const It& a, const It& b) { return a.d < b.d; });
+        for (const It& it : list) {
+            if (it.d > it.maxD) continue;
+            esp_marker(g, it.p, it.name, it.c, it.size, false, clampv(1.2f - it.d / it.maxD, 0.35f, 1.0f));
+        }
+    }
+}
+
 // --------------------------------------------------------------------------- HUD
 void hud_button(const Circle& c, const char* label, bool active, bool highlight, float a = 1.0f) {
     if (!c.show) return;
@@ -1297,6 +1672,18 @@ void hud_button(const Circle& c, const char* label, bool active, bool highlight,
 void draw_hud(Game& g, Settings& s, InputState& in, float dt, float fps) {
     float ts = 17.0f * TK;
     bool touch = in.touchMode;
+    if (g.modal == MD_NONE && g.pstate != PS_DEAD && g.pstate != PS_CUTSCENE) draw_esp(g, s, in);
+    // assist toggle feedback + a small reminder of what is on
+    g_assistMsgT = std::max(0.0f, g_assistMsgT - dt);
+    if (g_assistMsgT > 0) textShadow(FONT_SANS, g_assistMsg, g_W * 0.5f, g_H * 0.3f, ts, col(0xffb030, std::min(1.0f, g_assistMsgT)), 1);
+    if (s.fullBright || s.espMonster || s.espMission || s.espItems) {
+        std::string on = "ASSIST:";
+        if (s.fullBright) on += " BRIGHT";
+        if (s.espMonster) on += " MONSTER";
+        if (s.espMission) on += " MISSION";
+        if (s.espItems) on += " ITEMS";
+        text(FONT_MONO, on, 12.0f * U, g_H - (touch ? 8.0f : 8.0f) * U, 10.0f * TK, col(0xffb030, 0.55f), 0);
+    }
     // stage change: show the controls card on desktop at the very start
     if (g.stage != g_lastStage) {
         if (g_lastStage == -1 && g.stage == ST_FLASHLIGHT) g_controlsCard = 14.0f;

@@ -296,6 +296,9 @@ void crane_update(Game& g, const Controls& c, float dt);
 void rigger_update(Game& g, float dt);
 void rigger_spawn(Game& g, const Vec3& pos, int state);
 void rigger_pose(Game& g);
+float rigger_sight_range(const Game& g);   // metres it can see the player at right now
+float rigger_hearing_mult(const Game& g);  // scales how far sounds carry to it
+bool rigger_sees_player(const Game& g);
 void ending_update(Game& g, const Controls& c, float dt);
 void env_update(Game& g, float dt);
 void open_note(Game& g, int noteId);

@@ -51,6 +51,11 @@ struct Settings {
     int textSize = 1;            // 0 small, 1 medium, 2 large
     bool headBob = true;
     bool showFps = false;
+    // assists
+    bool fullBright = false;
+    bool espMonster = false;
+    bool espMission = false;
+    bool espItems = false;
 };
 
 struct LoadState {
