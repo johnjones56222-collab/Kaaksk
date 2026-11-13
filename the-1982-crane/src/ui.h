@@ -33,6 +33,7 @@ struct InputState {
     bool mdown = false, mpressed = false, mreleased = false;
     float wheel = 0;
     bool locked = false;         // pointer lock active
+    bool lockFailed = false;     // the browser refused pointer lock: drag to look instead
     TouchPt t[10];
     bool touchMode = false;      // last input came from a touch screen
     float W = 800, H = 600, dpr = 1;

@@ -299,7 +299,7 @@ void ending_update(Game& g, const Controls& in, float dt) {
             g.subs.clear();
             g.hint.clear(); g.hintT = 0;
             audio_stop_all(1.5f);
-            g.hGen = g.hPhone = g.hRadio = g.hRigBreath = g.hTape = g.hWaterDrain = g.hPump = g.hCraneMotor = g.hChase = g.hBuzz = g.hSlosh = -1;
+            g.hGen = g.hPhone = g.hRadio = g.hRigBreath = g.hTape = g.hWaterDrain = g.hPump = g.hCraneMotor = g.hChase = g.hBuzz = g.hSlosh = g.hTitle = -1;
             audio_loop(S_END_THEME, 0.8f);
             if (g.ending == 2) audio_play(S_KNOCK, 0.0f);
             // the shift is over: there is nothing to continue

@@ -257,7 +257,7 @@ struct Game {
 
     // audio handles
     int hGen = -1, hPhone = -1, hRadio = -1, hRigBreath = -1, hTape = -1, hWaterDrain = -1, hPump = -1, hCraneMotor = -1, hChase = -1,
-        hBuzz = -1, hSlosh = -1;
+        hBuzz = -1, hSlosh = -1, hTitle = -1;
 };
 
 // --- lifecycle ---

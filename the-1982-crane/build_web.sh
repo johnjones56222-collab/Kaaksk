@@ -10,7 +10,7 @@ SRC="src/main.cpp src/ui.cpp src/render.cpp src/game.cpp src/game_events.cpp src
 COMMON="-std=c++17 -Wall -Wextra -Wno-unused-parameter -fno-exceptions \
   -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sENVIRONMENT=web \
   -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=67108864 -sSTACK_SIZE=2097152 \
-  -sEXPORTED_FUNCTIONS=_main,_app_audio_render,_app_gesture_query,_app_lock_changed,_app_focus_lost,_app_state,_app_stage,_app_debug,_app_debug_load,_app_draw_calls,_app_query,_malloc,_free \
+  -sEXPORTED_FUNCTIONS=_main,_app_audio_render,_app_gesture_query,_app_lock_changed,_app_lock_failed,_app_focus_lost,_app_state,_app_stage,_app_debug,_app_debug_load,_app_draw_calls,_app_query,_malloc,_free \
   -sEXPORTED_RUNTIME_METHODS=ccall,UTF8ToString \
   --shell-file web/shell.html"
 if [ "$1" = "debug" ]; then

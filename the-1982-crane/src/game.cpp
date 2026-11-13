@@ -200,6 +200,7 @@ static void reset_state(Game& g) {
     bool died = g.flags[F_DIED_ONCE];
     float aspect = g.aspect;
     float bobScale = g.bobScale;
+    u32 frame = g.frame;
     std::string save = g.saveData;
     bool hasSave = g.hasSave;
     World keep;
@@ -210,6 +211,7 @@ static void reset_state(Game& g) {
     g.deaths = deaths;
     g.aspect = aspect;
     g.bobScale = bobScale;
+    g.frame = frame;
     g.saveData = save;
     g.hasSave = hasSave;
     for (int i = 0; i < F_COUNT; i++) g.flags[i] = false;

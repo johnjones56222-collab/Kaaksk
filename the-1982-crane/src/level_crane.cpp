@@ -562,7 +562,7 @@ void build_rigger(Builder& b) {
     World& w = b.w;
     // torso (origin at the pelvis)
     b.beginDyn();
-    b.m(M_OILSKIN, 0xffffff, 1.0f);
+    b.m(M_OILSKIN, 0x585858, 1.0f);
     b.box(Vec3(-0.2f, 0.0f, -0.12f), Vec3(0.2f, 0.84f, 0.13f));
     b.box(Vec3(-0.29f, 0.7f, -0.14f), Vec3(0.29f, 0.92f, 0.12f));       // shoulders, hunched
     b.box(Vec3(-0.24f, -0.62f, -0.14f), Vec3(0.24f, 0.08f, 0.15f), F_ALL & ~F_NY); // coat skirt
@@ -572,7 +572,7 @@ void build_rigger(Builder& b) {
     for (int i = 0; i < 4; i++) b.box(Vec3(-0.02f, 0.15f + i * 0.17f, 0.13f), Vec3(0.02f, 0.19f + i * 0.17f, 0.145f)); // buckles
     b.box(Vec3(-0.21f, 0.02f, -0.13f), Vec3(0.21f, 0.08f, 0.14f));        // belt
     // hunched back, collar turned up
-    b.m(M_OILSKIN, 0xffffff, 1.0f);
+    b.m(M_OILSKIN, 0x585858, 1.0f);
     b.box(Vec3(-0.25f, 0.55f, -0.21f), Vec3(0.25f, 0.92f, -0.1f));
     b.box(Vec3(-0.17f, 0.88f, -0.16f), Vec3(0.17f, 1.0f, 0.06f));
     // a mooring line wound round it, the way you would tie off a load
@@ -587,7 +587,7 @@ void build_rigger(Builder& b) {
             float a0 = (float)i / 12.0f * TAU;
             float px = std::cos(a0) * 0.235f, pz = std::sin(a0) * 0.145f + 0.005f;
             float len = hr.range(0.08f, 0.42f);
-            if (i & 1) b.m(M_KELP, 0xffffff, 2.0f); else b.m(M_OILSKIN, 0xffffff, 2.0f);
+            if (i & 1) b.m(M_KELP, 0xffffff, 2.0f); else b.m(M_OILSKIN, 0x585858, 2.0f);
             b.box(Vec3(px - 0.035f, -0.62f - len, pz - 0.012f), Vec3(px + 0.035f, -0.6f, pz + 0.012f));
         }
     }
@@ -604,7 +604,7 @@ void build_rigger(Builder& b) {
     b.named(DY_RIG_TORSO, b.endDyn(), Mat4::identity(), false);
     // head (origin at the neck)
     b.beginDyn();
-    b.m(M_OILSKIN, 0xffffff, 2.0f);
+    b.m(M_OILSKIN, 0x585858, 2.0f);
     b.box(Vec3(-0.06f, -0.02f, -0.06f), Vec3(0.06f, 0.1f, 0.06f));
     b.m(M_PLAIN, 0x0e0d0c, 2.0f);
     b.box(Vec3(-0.105f, 0.06f, -0.12f), Vec3(0.105f, 0.34f, 0.1f));
@@ -636,11 +636,11 @@ void build_rigger(Builder& b) {
     // arms
     for (int side = 0; side < 2; side++) {
         b.beginDyn();
-        b.m(M_OILSKIN, 0xffffff, 1.5f);
+        b.m(M_OILSKIN, 0x585858, 1.5f);
         b.box(Vec3(-0.055f, -0.56f, -0.055f), Vec3(0.055f, 0.03f, 0.055f));
         b.named(side ? DY_RIG_ARM_UR : DY_RIG_ARM_UL, b.endDyn(), Mat4::identity(), false);
         b.beginDyn();
-        b.m(M_OILSKIN, 0xffffff, 1.5f);
+        b.m(M_OILSKIN, 0x585858, 1.5f);
         b.box(Vec3(-0.045f, -0.6f, -0.045f), Vec3(0.045f, 0.02f, 0.045f));
         if (side == 0) {
             // left hand: fingers far too long
@@ -664,11 +664,11 @@ void build_rigger(Builder& b) {
     // legs
     for (int side = 0; side < 2; side++) {
         b.beginDyn();
-        b.m(M_OILSKIN, 0xffffff, 1.5f);
+        b.m(M_OILSKIN, 0x585858, 1.5f);
         b.box(Vec3(-0.07f, -0.6f, -0.07f), Vec3(0.07f, 0.02f, 0.07f));
         b.named(side ? DY_RIG_LEG_UR : DY_RIG_LEG_UL, b.endDyn(), Mat4::identity(), false);
         b.beginDyn();
-        b.m(M_OILSKIN, 0xffffff, 1.5f);
+        b.m(M_OILSKIN, 0x585858, 1.5f);
         b.box(Vec3(-0.055f, -0.56f, -0.055f), Vec3(0.055f, 0.02f, 0.055f));
         b.m(M_RUBBER, 0x707070, 2.0f);
         b.box(Vec3(-0.07f, -0.64f, -0.08f), Vec3(0.07f, -0.5f, 0.2f));

@@ -239,7 +239,9 @@ void ptr_update(InputState& in) {
         g_ptr.dy = t.y - t.ly;
         return;
     }
-    if (!in.locked && in.mx >= 0) {
+    // A click that captures the mouse locks the pointer before the frame sees it:
+    // still deliver that click to the button under it.
+    if (in.mx >= 0 && (!in.locked || in.mpressed || in.mreleased)) {
         g_ptr.has = true;
         g_ptr.x = in.mx; g_ptr.y = in.my;
         g_ptr.pressed = in.mpressed;
@@ -503,6 +505,10 @@ void ui_gather(Game& g, Settings& s, InputState& in, Controls& c, float dt) {
                 c.lookDX = in.mdx * 0.0022f * s.lookSens;
                 c.lookDY = -in.mdy * 0.0022f * s.lookSens * (s.invertY ? -1.0f : 1.0f);
                 if (in.mpressed && g.promptIdx >= 0) c.interact = true;
+            } else if (in.lockFailed && in.mdown && !in.touchMode) {
+                // no pointer lock available (embedded page, strict browser): hold and drag to look
+                c.lookDX = in.mdx * 0.0045f * s.lookSens;
+                c.lookDY = -in.mdy * 0.0045f * s.lookSens * (s.invertY ? -1.0f : 1.0f);
             }
         } else {
             c.pause = kp(K_ESC) || kp(K_P);
@@ -1491,7 +1497,12 @@ void draw_hud(Game& g, Settings& s, InputState& in, float dt, float fps) {
         }
     }
     // pointer lock reminder
-    if (!touch && g.modal == MD_NONE && alive && !in.locked && g.appMode == AM_PLAY) {
+    if (!touch && g.modal == MD_NONE && alive && !in.locked && g.appMode == AM_PLAY && in.lockFailed) {
+        static float shown = 0;
+        shown += dt;
+        if (shown < 12.0f) textShadow(FONT_SANS, "Hold the left mouse button and drag to look around", g_W * 0.5f, g_H * 0.66f, ts * 0.85f,
+                                      col(C_INK, std::min(1.0f, (12.0f - shown) / 2.0f) * 0.8f), 1);
+    } else if (!touch && g.modal == MD_NONE && alive && !in.locked && g.appMode == AM_PLAY) {
         float a = 0.7f + 0.3f * std::sin((float)g.time * 3.0f);
         float by = g_H * 0.66f;
         rect(g_W * 0.5f - 130 * U, by - 26 * U, 260 * U, 36 * U, col(0x000000, 0.45f));

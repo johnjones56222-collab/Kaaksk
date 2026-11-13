@@ -646,7 +646,7 @@ void env_update(Game& g, float dt) {
     if (g.pstate == PS_OPERATING) fearT = std::max(fearT, g.crane.climb * 0.9f);
     if (fearT > g.fear) g.fear = dampf(g.fear, fearT, 2.5f, dt);
     else g.fear = std::max(fearT, g.fear - dt * 0.035f);
-    float interT = rigNear ? saturate(1.0f - rd / 14.0f) : 0.0f;
+    float interT = rigNear ? std::pow(saturate(1.0f - rd / 13.0f), 1.6f) : 0.0f;
     if (g.pstate == PS_OPERATING) interT = std::max(interT, saturate((g.crane.climb - 0.6f) * 2.5f));
     if (g.pstate == PS_DEAD) interT = 1.0f;
     g.interference = dampf(g.interference, interT, 5.0f, dt);
@@ -694,6 +694,7 @@ void env_update(Game& g, float dt) {
 // ---------------------------------------------------------------------------
 void game_title_update(Game& g, float dt) {
     g.time += dt;
+    if (g.hTitle < 0 && audio_ready()) g.hTitle = audio_loop(S_TITLE, 0.6f);
     g.titleT += dt;
     float t = g.titleT;
     Controls none;

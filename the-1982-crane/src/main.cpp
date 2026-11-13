@@ -103,8 +103,13 @@ EM_JS(void, js_install_page_hooks, (), {
         if (q & 1) {
             try {
                 const p = cv.requestPointerLock({unadjustedMovement: true});
-                if (p && p.catch) p.catch(function() { try { cv.requestPointerLock(); } catch (e2) {} });
-            } catch (err) { try { cv.requestPointerLock(); } catch (e3) {} }
+                if (p && p.catch) p.catch(function() {
+                    try {
+                        const p2 = cv.requestPointerLock();
+                        if (p2 && p2.catch) p2.catch(function() { _app_lock_failed(); });
+                    } catch (e2) { _app_lock_failed(); }
+                });
+            } catch (err) { try { cv.requestPointerLock(); } catch (e3) { _app_lock_failed(); } }
         }
         if (q & 2) {
             const el = document.documentElement;
@@ -120,6 +125,7 @@ EM_JS(void, js_install_page_hooks, (), {
         }
     };
     cv.addEventListener('pointerdown', onDown);
+    document.addEventListener('pointerlockerror', function() { _app_lock_failed(); });
     document.addEventListener('pointerlockchange', function() { _app_lock_changed(document.pointerLockElement === cv ? 1 : 0); });
     window.addEventListener('blur', function() { _app_focus_lost(); });
     document.addEventListener('visibilitychange', function() { if (document.hidden) _app_focus_lost(); });
@@ -260,6 +266,7 @@ EMSCRIPTEN_KEEPALIVE float app_query(int what) {
     default: return 0.0f;
     }
 }
+EMSCRIPTEN_KEEPALIVE void app_lock_failed() { IN.lockFailed = true; }
 EMSCRIPTEN_KEEPALIVE void app_focus_lost() {
     for (int i = 0; i < K_COUNT; i++) IN.down[i] = false;
     IN.mdown = false;

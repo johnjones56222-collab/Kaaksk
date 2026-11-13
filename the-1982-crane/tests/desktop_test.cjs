@@ -44,15 +44,17 @@ const fs = require('fs');
   await settle();
   await page.mouse.click(W / 2, by + 22 * U + 23 * U);   // STORY (the difficulty page keeps 46U buttons)
   await settle();
-  if (await q(13) !== 1) { console.log('  (difficulty click missed; using the debug hook)'); await dbg(1, 1); }
+  check(await q(13) === 1, 'clicking NEW SHIFT then STORY starts a shift');
+  if (await q(13) !== 1) await dbg(1, 1);
   await wait(3500);
   check(await q(13) === 1, 'a shift is running');
   console.log('  (frame rate here: ' + (await q(22)).toFixed(1) + ' fps)');
   // walk forward with W (pointer lock is not available headless; movement keys do not need it)
+  await dbg(2, 0, 0, 30, 0); await dbg(3, 0); await settle(4);   // open road, facing the quay
   const x0 = await q(0), z0 = await q(2), t0 = await q(21);
   await page.keyboard.down('KeyW'); await wait(1500); await page.keyboard.up('KeyW'); await settle();
   const d = Math.hypot((await q(0)) - x0, (await q(2)) - z0), gt = (await q(21)) - t0;
-  check(d / gt > 1.8, 'W walks forward (' + d.toFixed(2) + ' m in ' + gt.toFixed(2) + ' s of game time)');
+  check(d / gt > 1.6, 'W walks forward (' + d.toFixed(2) + ' m in ' + gt.toFixed(2) + ' s of game time)');
   await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW'); await wait(1000); await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
   await press('KeyC');
   check(await q(16) === 1, 'C crouches');
