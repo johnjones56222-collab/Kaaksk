@@ -121,10 +121,12 @@ struct Bot {
         return out;
     }
     // returns true once the interaction has been triggered
-    bool interactIdx(int idx, const Vec3* standOverride = nullptr) {
+    // `seen`: where the thing actually appears on screen. The bot goes to and aims at what a
+    // player can see, so an interact volume that is not where its object is drawn fails the test.
+    bool interactIdx(int idx, const Vec3* standOverride = nullptr, const Vec3* seen = nullptr) {
         if (idx < 0) return false;
         const Interact& it = g.w.interacts[(size_t)idx];
-        Vec3 center = interactCenter(idx);
+        Vec3 center = seen ? *seen : interactCenter(idx);
         bool seated = g.pstate == PS_SEATED;
         if (!seated) {
             // the stand point is chosen once per target so the bot does not dither between candidates
@@ -144,7 +146,11 @@ struct Bot {
         }
         // try the centre first, then other points of the box
         Vec3 aimP = center;
-        if (aimVariant > 0) {
+        if (aimVariant > 0 && seen) {
+            static const float o[6][3] = {{0, 0.05f, 0}, {0, -0.03f, 0}, {0.06f, 0, 0}, {-0.06f, 0, 0}, {0, 0, 0.06f}, {0, 0, -0.06f}};
+            const float* q = o[(aimVariant - 1) % 6];
+            aimP = center + Vec3(q[0], q[1], q[2]);
+        } else if (aimVariant > 0) {
             Vec3 h = it.box.half() * 0.6f;
             static const float o[6][3] = {{0, 0.6f, 0}, {0, -0.6f, 0}, {0.7f, 0, 0}, {-0.7f, 0, 0}, {0, 0, 0.7f}, {0, 0, -0.7f}};
             const float* q = o[(aimVariant - 1) % 6];
@@ -162,8 +168,19 @@ struct Bot {
         }
         return false;
     }
-    bool pickup(int item) { return interactIdx(g.w.itemInteract[item]); }
-    bool readNote(int note) { return interactIdx(g.w.noteInteract[note]); }
+    Vec3 itemSeen(int item) const {
+        const DynObj& d = g.w.dyn[(size_t)g.w.itemDyn[item]];
+        return d.xf.point(g.w.dynMeshes[(size_t)d.mesh].box.center());
+    }
+    bool pickup(int item) {
+        Vec3 v = itemSeen(item);
+        return interactIdx(g.w.itemInteract[item], nullptr, &v);
+    }
+    bool readNote(int note) {
+        if (g.w.interacts[(size_t)g.w.noteInteract[note]].xfDyn >= 0) return interactIdx(g.w.noteInteract[note]);
+        Vec3 v = g.w.notePos[note];
+        return interactIdx(g.w.noteInteract[note], nullptr, &v);
+    }
     bool useObj(int u) { return interactIdx(g.w.useInteract[u]); }
     int ladderInteract(int lad, int dir) const {
         for (size_t i = 0; i < g.w.interacts.size(); i++)
@@ -190,7 +207,8 @@ struct Bot {
             if (distXZ(g.pos, doorOut) > 0.35f && g.pos.x < 30.7f) walkTo(doorOut); else walkTo(inside);
             return false;
         }
-        return interactIdx(g.w.itemInteract[item], &stand);
+        Vec3 v = itemSeen(item);
+        return interactIdx(g.w.itemInteract[item], &stand, &v);
     }
     bool bargeLeave() {
         static const Vec3 head(27.0f, 0, QUAY_Z + 1.6f), foot(27.0f, -0.5f, -51.4f), doorOut(30.9f, -0.5f, -55.6f), inside(33.4f, -0.5f, -55.6f);

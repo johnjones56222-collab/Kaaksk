@@ -476,6 +476,19 @@ static AABB xformBox(const Mat4& m, const Vec3& mn, const Vec3& mx) {
     return AABB(lo, hi);
 }
 
+void Builder::trigger(int id, const Vec3& mn, const Vec3& mx) {
+    Trigger t;
+    t.box = hasXf ? xformBox(cur, mn, mx) : AABB(vmin(mn, mx), vmax(mn, mx));
+    t.id = id;
+    w.triggers.push_back(t);
+}
+void Builder::zone(int kind, const Vec3& mn, const Vec3& mx) {
+    Zone z;
+    z.box = hasXf ? xformBox(cur, mn, mx) : AABB(vmin(mn, mx), vmax(mn, mx));
+    z.kind = kind;
+    w.zones.push_back(z);
+}
+
 int Builder::collider(const Vec3& mn, const Vec3& mx, u16 flags, u8 surf) {
     Collider c;
     c.box = hasXf ? xformBox(cur, mn, mx) : AABB(vmin(mn, mx), vmax(mn, mx));

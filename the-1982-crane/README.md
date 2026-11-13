@@ -69,7 +69,8 @@ Requirements: [Emscripten](https://emscripten.org) (built and tested with 7.0.0)
 tests/build_native.sh build-native     # native builds with AddressSanitizer + UBSan
 build-native/headless all              # a bot plays the whole game: both endings,
                                        # plus live-AI runs on standard and nightmare
-build-native/worldmap map.ppm          # reachability of every item, note and objective
+build-native/worldmap map.ppm          # every item, note and objective reachable, and every pickup
+                                       # drawn where it can be picked up
 
 # browser tests (Playwright + headless Chromium), against a served debug build
 node tests/desktop_test.cjs http://localhost:8765/index.html out/

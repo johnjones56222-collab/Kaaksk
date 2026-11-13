@@ -132,13 +132,21 @@ void makeDoor(Builder& b, int id, const Vec3& hinge, float width, float height, 
     b.pop();
 }
 
-void beginItem(Builder& b) { b.beginDyn(); }
+// An item's mesh is built in its own local space and its position is a world position, so the
+// builder's current transform (for example inside a container) must not apply to either.
+static Builder::XfState g_itemXf;
+void beginItem(Builder& b) {
+    g_itemXf = b.saveXf();
+    b.identityXf();
+    b.beginDyn();
+}
 void endItem(Builder& b, int itemId, const Vec3& pos, float yaw, float grab) {
     int mesh = b.endDyn();
     World& w = b.w;
     w.itemDyn[itemId] = b.addDyn(mesh, Mat4::translate(pos) * Mat4::rotY(yaw));
     b.interact(IK_PICKUP, itemId, pos - Vec3(grab, grab * 0.5f, grab), pos + Vec3(grab, grab, grab), 2.3f);
     w.itemPos[itemId] = pos;
+    b.restoreXf(g_itemXf);
 }
 void itemBattery(Builder& b, int itemId, const Vec3& pos, float yaw) {
     beginItem(b);
@@ -172,6 +180,9 @@ void itemFuse(Builder& b, int itemId, const Vec3& pos, float yaw) {
 }
 
 void notePaper(Builder& b, int noteId, const Vec3& pos, const Vec3& normal, float wdt, float hgt, bool clipboard) {
+    // pos and normal are world space: build without whatever transform is active
+    Builder::XfState saved = b.saveXf();
+    b.identityXf();
     Vec3 n = normalize(normal);
     Vec3 up = std::fabs(n.y) > 0.9f ? Vec3(0, 0, -1) : Vec3(0, 1, 0);
     Vec3 r = normalize(cross(up, n));
@@ -196,6 +207,7 @@ void notePaper(Builder& b, int noteId, const Vec3& pos, const Vec3& normal, floa
     ea = vmax(ea, Vec3(0.08f, 0.08f, 0.08f));
     b.interact(IK_NOTE, noteId, pos - ea, pos + ea, 2.2f);
     b.w.notePos[noteId] = pos;
+    b.restoreXf(saved);
 }
 
 void hideLocker(Builder& b, int hideIdx, const Vec3& base, float yaw, u32 tint) {

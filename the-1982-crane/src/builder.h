@@ -75,8 +75,15 @@ struct Builder {
     int light(const Vec3& pos, u32 color, float intensity, float radius, int group, int flicker = FL_NONE, float halo = 0.0f);
     int spot(const Vec3& pos, const Vec3& dir, float outerDeg, u32 color, float intensity, float radius, int group, int flicker = FL_NONE, float halo = 0.0f);
     int interact(int kind, int arg, const Vec3& mn, const Vec3& mx, float range = 2.3f);
-    void trigger(int id, const Vec3& mn, const Vec3& mx) { Trigger t; t.box = AABB(mn, mx); t.id = id; w.triggers.push_back(t); }
-    void zone(int kind, const Vec3& mn, const Vec3& mx) { Zone z; z.box = AABB(mn, mx); z.kind = kind; w.zones.push_back(z); }
+    // trigger volumes and zones follow the current transform, like colliders
+    void trigger(int id, const Vec3& mn, const Vec3& mx);
+    void zone(int kind, const Vec3& mn, const Vec3& mx);
+
+    // Pickups and documents are placed in world coordinates whatever transform is active.
+    struct XfState { Mat4 cur; bool hasXf; std::vector<Mat4> stack; };
+    XfState saveXf() const { return XfState{cur, hasXf, stack}; }
+    void identityXf() { cur = Mat4::identity(); hasXf = false; stack.clear(); }
+    void restoreXf(const XfState& st) { cur = st.cur; hasXf = st.hasXf; stack = st.stack; }
 
     // --- dynamic meshes ---
     void beginDyn();

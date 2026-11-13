@@ -269,6 +269,7 @@ EMSCRIPTEN_KEEPALIVE float app_query(int what) {
     case 21: return (float)g.time;
     case 22: return g_fps;
     case 23: return (float)g.frame;
+    case 25: return g.have[IT_FUSE_B] ? 1.0f : 0.0f;
     case 24: return (float)((S.fullBright ? 1 : 0) | (S.espMonster ? 2 : 0) | (S.espMission ? 4 : 0) | (S.espItems ? 8 : 0));
     case 20: return g.noteOpen;
     case 18: return g.promptIdx >= 0 ? (float)(g.w.interacts[(size_t)g.promptIdx].kind * 100 + g.w.interacts[(size_t)g.promptIdx].arg) : -1.0f;
