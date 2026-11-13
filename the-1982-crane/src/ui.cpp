@@ -764,7 +764,9 @@ void draw_title(Game& g, Settings& s, InputState& in, float dt) {
     // darken so the menu reads over the yard
     rect(0, 0, g_W, g_H, col(0x000000, 0.35f));
     float sz = std::min(g_W * (portrait ? 0.16f : 0.085f), 66.0f * U);
-    float logoY = portrait ? g_H * 0.16f : g_H * 0.13f;
+    bool shortScreen = g_H < 560.0f;
+    if (shortScreen) sz = std::min(sz, g_H * 0.085f);
+    float logoY = portrait ? g_H * 0.16f : (shortScreen ? g_H * 0.08f : g_H * 0.13f);
     if (g_titlePage == TP_GATE) {
         draw_title_logo(cx, g_H * 0.3f, sz * 1.15f, 1.0f);
         g_gateHint += dt;
@@ -781,9 +783,13 @@ void draw_title(Game& g, Settings& s, InputState& in, float dt) {
     draw_title_logo(cx, logoY, sz, 1.0f);
     text(FONT_MONO, "BERTH 9 - PORT OF ASHGROVE - NOVEMBER 11, 1982", cx, logoY + sz * 1.62f, 12.0f * TK, col(C_DIM), 1);
     float bw = std::min(g_W - 40.0f * U, 340.0f * U), bh = 46.0f * U, gap = 10.0f * U;
-    float by = logoY + sz * 1.62f + 34.0f * U;
+    float by = logoY + sz * 1.62f + (shortScreen ? 22.0f : 34.0f) * U;
     float bx = cx - bw * 0.5f;
     if (g_titlePage == TP_MAIN) {
+        int nb = 3 + ((g.hasSave && !g.saveData.empty()) ? 1 : 0) + (in.touchMode ? 1 : 0);
+        float avail = g_H - by - 26.0f * U;
+        if (shortScreen) gap = 7.0f * U;
+        bh = clampv(avail / nb - gap, 30.0f * U, 46.0f * U);
         if (g.hasSave && !g.saveData.empty()) {
             g_lockRects.push_back({bx, by, bw, bh});
             if (button("CONTINUE SHIFT", bx, by, bw, bh, true, true)) {
@@ -807,7 +813,28 @@ void draw_title(Game& g, Settings& s, InputState& in, float dt) {
              col(0x5a574e), 1);
     } else if (g_titlePage == TP_NEW || g_titlePage == TP_CONFIRM) {
         g_fsRect[0] = -1;
-        if (g_titlePage == TP_NEW) {
+        if (g_titlePage == TP_NEW && shortScreen) {
+            // three columns side by side on short (landscape phone) screens
+            text(FONT_SANS, "CHOOSE YOUR SHIFT", cx, by + 4 * U, 15.0f * TK, col(C_DIM), 1, 2.0f);
+            by += 18.0f * U;
+            float colW = std::min((g_W - 48.0f * U) / 3.0f, 250.0f * U);
+            float x0 = cx - colW * 1.5f - 8.0f * U;
+            float cbh = std::min(42.0f * U, bh);
+            for (int d = 0; d < 3; d++) {
+                float x = x0 + d * (colW + 8.0f * U);
+                if (!(g.hasSave && !g.saveData.empty())) g_lockRects.push_back({x, by, colW, cbh});
+                if (button(DIFF_NAME[d], x, by, colW, cbh, true, d == 1)) {
+                    g_pendingDifficulty = d;
+                    if (g.hasSave && !g.saveData.empty()) g_titlePage = TP_CONFIRM;
+                    else { game_new(g, d); g_titlePage = TP_MAIN; }
+                }
+                wrap(FONT_SANS, DIFF_DESC[d], 11.5f * TK, colW - 8.0f * U, g_lines);
+                float ty = by + cbh + 14.0f * U;
+                for (auto& l : g_lines) { text(FONT_SANS, l, x + colW * 0.5f, ty, 11.5f * TK, col(C_DIM), 1); ty += 14.0f * TK; }
+            }
+            float backY = std::min(g_H - cbh - 10.0f * U, by + cbh + 14.0f * U + 4 * 14.0f * TK + 10.0f * U);
+            if (button("BACK", cx - 90 * U, backY, 180 * U, cbh * 0.9f) || in.pressed[K_ESC]) g_titlePage = TP_MAIN;
+        } else if (g_titlePage == TP_NEW) {
             text(FONT_SANS, "CHOOSE YOUR SHIFT", cx, by + 4 * U, 16.0f * TK, col(C_DIM), 1, 2.0f);
             by += 22.0f * U;
             for (int d = 0; d < 3; d++) {
@@ -1295,7 +1322,8 @@ void draw_hud(Game& g, Settings& s, InputState& in, float dt, float fps) {
     // objective banner
     if (g.toastT > 0 && !g.toast.empty()) {
         float a = std::min(1.0f, g.toastT / 0.8f) * std::min(1.0f, (6.0f - g.toastT) / 0.4f);
-        float x = 18.0f * U, y = 26.0f * U + (touch ? 0.0f : 0.0f);
+        bool inCab = g.pstate == PS_OPERATING || g.pstate == PS_SEATED;
+        float x = inCab ? 244.0f * U : 18.0f * U, y = 26.0f * U;
         text(FONT_SANS, "NEW OBJECTIVE", x, y, ts * 0.7f, col(C_AMBER, a), 0, 2.0f * U);
         wrap(FONT_SANS, g.toast, ts * 1.05f, std::min(g_W * 0.6f, 460.0f * U), g_lines);
         float yy = y + ts * 1.35f;
@@ -1304,16 +1332,19 @@ void draw_hud(Game& g, Settings& s, InputState& in, float dt, float fps) {
     // checkpoint indicator
     if (g.checkpointT > 0) {
         float a = std::min(1.0f, g.checkpointT) * (0.6f + 0.4f * std::sin((float)g.time * 6.0f));
-        text(FONT_MONO, "PROGRESS SAVED", g_W - 18.0f * U, g_H - (touch ? g_H * 0.5f : 18.0f * U), ts * 0.7f, col(C_DIM, a), 2);
+        if (touch) text(FONT_MONO, "PROGRESS SAVED", g_W * 0.5f, 22.0f * U, ts * 0.7f, col(C_DIM, a), 1);
+        else text(FONT_MONO, "PROGRESS SAVED", g_W - 18.0f * U, g_H - 18.0f * U, ts * 0.7f, col(C_DIM, a), 2);
     }
     // subtitles
     {
-        float y = g_H - (touch ? 128.0f : 64.0f) * U;
+        // on touch screens subtitles sit low in the gap between the thumbs
+        float y = touch ? (g.pstate == PS_OPERATING ? g_H - 112.0f * U : g_H - 14.0f * U) : g_H - 64.0f * U;
+        float subX = touch ? g_W * 0.46f : g_W * 0.5f;
         const Subtitle* sub = nullptr;
         if (!g.subs.empty() && g.subs.front().delay <= 0) sub = &g.subs.front();
         if (sub) {
             float a = std::min(1.0f, sub->time / 0.35f);
-            float maxW = std::min(g_W * (touch ? 0.6f : 0.72f), 760.0f * U);
+            float maxW = std::min(g_W * (touch ? 0.5f : 0.72f), 760.0f * U);
             std::string sp = sub->speaker;
             u32 scol = sp == "DISPATCH" ? C_AMBER : (sp == "TAPE" ? 0x9fb8a0 : (sp == "PHONE" ? 0xd04a3a : C_INK));
             std::string body = sub->text;
@@ -1323,23 +1354,23 @@ void draw_hud(Game& g, Settings& s, InputState& in, float dt, float fps) {
             float bw = 0;
             for (auto& l : g_lines) bw = std::max(bw, textW(FONT_SANS, l, ts * 1.08f));
             float by = y - bh;
-            rect(g_W * 0.5f - bw * 0.5f - 14 * U, by, bw + 28 * U, bh + 6 * U, col(0x000000, 0.5f * a));
+            rect(subX - bw * 0.5f - 14 * U, by, bw + 28 * U, bh + 6 * U, col(0x000000, 0.5f * a));
             float yy = by + lh * 0.95f;
             if (!sp.empty()) {
-                text(FONT_SANS, sp, g_W * 0.5f, yy - lh * 0.08f, ts * 0.72f, col(scol, a), 1, 2.0f * U);
+                text(FONT_SANS, sp, subX, yy - lh * 0.08f, ts * 0.72f, col(scol, a), 1, 2.0f * U);
                 yy += lh * 0.8f;
             }
             u32 tc = sp.empty() ? col(0xe8e2d0, a) : col(sp == "TAPE" ? 0xc8d8c0 : 0xf0e8d0, a);
-            for (auto& l : g_lines) { text(FONT_SANS, l, g_W * 0.5f, yy, ts * 1.08f, tc, 1); yy += lh; }
+            for (auto& l : g_lines) { text(FONT_SANS, l, subX, yy, ts * 1.08f, tc, 1); yy += lh; }
         }
         // short hints
         if (g.hintT > 0 && !g.hint.empty()) {
             float a = std::min(1.0f, g.hintT / 0.5f);
             float hy = sub ? y - 150.0f * U : y - 10 * U;
-            if (touch) hy = std::min(hy, g_H * 0.5f + 80 * U);
-            wrap(FONT_SANS, g.hint, ts * 0.92f, std::min(g_W * 0.62f, 640.0f * U), g_lines);
-            float yy = hy - (g_lines.size() - 1) * ts * 1.3f;
-            for (auto& l : g_lines) { textShadow(FONT_SANS, l, g_W * 0.5f, yy, ts * 0.92f, col(0xc8c2b0, a), 1); yy += ts * 1.3f; }
+            if (touch) hy = g.pstate == PS_OPERATING ? g_H * 0.3f : g_H * 0.5f + 64.0f * U; // clear of both thumbs
+            wrap(FONT_SANS, g.hint, ts * 0.92f, std::min(g_W * (touch ? 0.5f : 0.62f), 640.0f * U), g_lines);
+            float yy = touch ? hy : hy - (g_lines.size() - 1) * ts * 1.3f;
+            for (auto& l : g_lines) { textShadow(FONT_SANS, l, subX, yy, ts * 0.92f, col(0xc8c2b0, a), 1); yy += ts * 1.3f; }
         }
     }
     // battery + stamina (bottom left on desktop, top left on touch)

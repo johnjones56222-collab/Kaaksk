@@ -251,6 +251,11 @@ EMSCRIPTEN_KEEPALIVE float app_query(int what) {
     case 15: return (float)g.promptIdx;
     case 16: return g.crouched ? 1.0f : 0.0f;
     case 17: return g.pitch;
+    case 19: return audio_peak();
+    case 21: return (float)g.time;
+    case 22: return g_fps;
+    case 23: return (float)g.frame;
+    case 20: return g.noteOpen;
     case 18: return g.promptIdx >= 0 ? (float)(g.w.interacts[(size_t)g.promptIdx].kind * 100 + g.w.interacts[(size_t)g.promptIdx].arg) : -1.0f;
     default: return 0.0f;
     }
@@ -470,7 +475,17 @@ static void frame() {
     Game& g = *G;
     Controls c;
     ui_gather(g, S, IN, c, dt);
-    game_update(g, c, dt);
+    // The simulation steps at most 50 ms at a time. Slow devices get extra steps so the
+    // world still runs in real time; one-shot inputs are only delivered on the first.
+    int steps = dt > 0.05f ? 2 : 1;
+    float sub = dt / (float)steps;
+    game_update(g, c, sub);
+    for (int i = 1; i < steps; i++) {
+        Controls h;
+        h.moveX = c.moveX; h.moveY = c.moveY; h.sprint = c.sprint;
+        h.craneSlew = c.craneSlew; h.craneTrolley = c.craneTrolley; h.craneHoist = c.craneHoist;
+        game_update(g, h, sub);
+    }
     audio_set_volume(S.volume);
 
     // dynamic resolution when the scale is on auto

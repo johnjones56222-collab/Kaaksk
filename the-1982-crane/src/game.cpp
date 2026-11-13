@@ -612,7 +612,7 @@ static void take_item(Game& g, int item) {
     case IT_FLASHLIGHT:
         g.flashOn = true;
         audio_play(S_SWITCH, 0.7f);
-        hint(g, "Flashlight. Toggle it with F or the lamp button. Batteries do not last.", 6.0f);
+        hint(g, "Flashlight. Turn it off and on with F (LAMP on a touch screen). Batteries do not last.", 6.0f);
         break;
     case IT_RADIO:
         audio_play(S_RADIO_ON, 0.8f);

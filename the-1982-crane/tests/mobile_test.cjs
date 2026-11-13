@@ -18,10 +18,15 @@ const fs = require('fs');
   let failures = 0;
   const check = (cond, msg) => { console.log((cond ? '  ok   ' : '  FAIL ') + msg); if (!cond) failures++; };
   const wait = (ms) => page.waitForTimeout(ms);
+  // wait until the game has simulated at least n more frames (software rendering is slow and uneven)
+  const settle = async (n = 4) => {
+    const f0 = await page.evaluate(() => Module._app_query(23));
+    for (let i = 0; i < 200; i++) { await page.waitForTimeout(30); if ((await page.evaluate(() => Module._app_query(23))) >= f0 + n) return; }
+  };
   const q = (i) => page.evaluate((i) => Module._app_query(i), i);
   const dbg = (c, a = 0, b = 0, cc = 0, d = 0) => page.evaluate(([c, a, b, cc, d]) => Module._app_debug(c, a, b, cc, d), [c, a, b, cc, d]);
   const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map((p, i) => ({ x: p[0], y: p[1], id: p[2] !== undefined ? p[2] : i })) });
-  const tap = async (x, y) => { await touch('touchStart', [[x, y, 5]]); await wait(60); await touch('touchEnd', []); await wait(120); };
+  const tap = async (x, y) => { await touch('touchStart', [[x, y, 5]]); await wait(60); await touch('touchEnd', []); await settle(); };
   const drag = async (x0, y0, x1, y1, ms, id = 7) => {
     await touch('touchStart', [[x0, y0, id]]);
     const steps = Math.max(2, Math.floor(ms / 33));
@@ -39,19 +44,21 @@ const fs = require('fs');
   await wait(300);
   await shot('m00-title');
   // NEW SHIFT is the first menu button (no save yet)
-  const sz = Math.min(W * 0.085, 66 * U), logoY = H * 0.13;
-  const by = logoY + sz * 1.62 + 34 * U, bh = 46 * U;
+  // mirrors draw_title() for short landscape screens
+  const sz = Math.min(W * 0.085, 66 * U, H * 0.085), logoY = H * 0.08;
+  const by = logoY + sz * 1.62 + 22 * U;
+  const bh = Math.min(Math.max((H - by - 26 * U) / 4 - 7 * U, 30 * U), 46 * U);
   await tap(W / 2, by + bh / 2);
   await wait(300);
   await shot('m01-difficulty');
-  // STORY is the first difficulty button
-  await tap(W / 2, by + 22 * U + bh / 2);
+  check(await q(13) === 0, 'NEW SHIFT opens the shift choice (still on the title)');
+  // STORY is the first of three columns
+  const colW = Math.min((W - 48 * U) / 3, 250 * U), cbh = Math.min(42 * U, bh);
+  await tap(W / 2 - colW * 1.5 - 8 * U + colW / 2, by + 18 * U + cbh / 2);
   await wait(500);
   let mode = await q(13);
-  if (mode !== 1) { // fall back to starting directly if the layout guess missed
-    console.log('  (menu tap missed; starting via debug hook)');
-    await dbg(1, 1);
-  }
+  check(mode === 1, 'tapping STORY starts the shift');
+  if (mode !== 1) await dbg(1, 0);
   await wait(3000);
   check(await q(13) === 1, 'a new shift has started');
   await shot('m02-hud');
