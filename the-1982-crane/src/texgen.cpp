@@ -33,7 +33,7 @@ const MatInfo g_matInfo[M_COUNT] = {
     /* CONTDOOR   */ {0.34f, 22.0f, 0.0f, 1.0f},
     /* ROOF       */ {0.20f, 16.0f, 0.5f, 0.6f},
     /* KELP       */ {0.80f, 50.0f, 0.0f, 1.0f},
-    /* OILSKIN    */ {0.60f, 30.0f, 0.0f, 0.8f},
+    /* OILSKIN    */ {0.26f, 55.0f, 0.0f, 0.8f},
     /* BLINDS     */ {0.20f, 16.0f, 0.0f, 0.5f},
     /* NOISE      */ {0.0f, 1.0f, 0.0f, 0.0f},
     /* SIGN0..11  */ {0.12f, 12.0f, 0.0f, 0.0f}, {0.12f, 12.0f, 0.0f, 0.0f}, {0.12f, 12.0f, 0.0f, 0.0f},

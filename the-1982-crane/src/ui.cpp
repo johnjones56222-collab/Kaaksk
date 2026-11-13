@@ -218,6 +218,7 @@ struct Ptr {
 Ptr g_ptr;
 u32 g_pressId = 0, g_dragId = 0;
 float g_dragLast = 0;
+float g_mapDragX = 0;
 
 u32 hid(const char* s, float x, float y) {
     u32 h = 2166136261u;
@@ -971,12 +972,42 @@ void objective_marks(const Game& g, std::vector<Vec3>& out) {
     }
 }
 
-void draw_map(Game& g, float x, float y, float w, float h) {
+float g_mapZoom = 1.0f;
+Vec2 g_mapC(0, 0);
+bool g_mapReset = true;
+
+void draw_map(Game& g, float x, float y, float w, float h, InputState& in) {
     const World& wd = g.w;
     rect(x, y, w, h, col(C_BLUEPRINT));
     const float wx0 = -86, wx1 = 86, wz0 = -66, wz1 = 74;
-    float sc = std::min(w / (wx1 - wx0), h / (wz1 - wz0));
-    float ox = x + (w - (wx1 - wx0) * sc) * 0.5f, oy = y + (h - (wz1 - wz0) * sc) * 0.5f;
+    float base = std::min(w / (wx1 - wx0), h / (wz1 - wz0));
+    if (g_mapReset) {
+        g_mapReset = false;
+        // small screens start zoomed in around the player; big ones see everything
+        g_mapZoom = base < 3.0f ? clampv(3.2f / base, 1.0f, 3.0f) : 1.0f;
+        g_mapC = g_mapZoom > 1.01f ? Vec2(g.pos.x, std::min(g.pos.z, 72.0f)) : Vec2((wx0 + wx1) * 0.5f, (wz0 + wz1) * 0.5f);
+    }
+    // zoom: wheel, pinch-free +/- buttons
+    u32 mid = hid("map-pan", 0, 0);
+    bool over = g_ptr.has && inside(g_ptr.x, g_ptr.y, x, y, w, h);
+    if (over && in.wheel != 0) g_mapZoom = clampv(g_mapZoom * std::exp(-in.wheel * 0.0015f), 1.0f, 4.0f);
+    float bsz = 34.0f * U;
+    float sc = base * g_mapZoom;
+    if (g_ptr.pressed && over && !inside(g_ptr.x, g_ptr.y, x + w - bsz - 12 * U, y + h - 2 * bsz - 18 * U, bsz + 12 * U, 2 * bsz + 18 * U)) {
+        g_dragId = mid;
+        g_dragLast = g_ptr.y;
+        g_mapDragX = g_ptr.x;
+    }
+    if (g_dragId == mid && g_ptr.down) {
+        g_mapC.x -= (g_ptr.x - g_mapDragX) / sc;
+        g_mapC.y -= (g_ptr.y - g_dragLast) / sc;
+        g_mapDragX = g_ptr.x;
+        g_dragLast = g_ptr.y;
+    }
+    float hw = w * 0.5f / sc, hh = h * 0.5f / sc;
+    g_mapC.x = (wx1 - wx0) * 0.5f <= hw ? (wx0 + wx1) * 0.5f : clampv(g_mapC.x, wx0 + hw, wx1 - hw);
+    g_mapC.y = (wz1 - wz0) * 0.5f <= hh ? (wz0 + wz1) * 0.5f : clampv(g_mapC.y, wz0 + hh, wz1 - hh);
+    float ox = x + w * 0.5f - (g_mapC.x - wx0) * sc, oy = y + h * 0.5f - (g_mapC.y - wz0) * sc;
     auto P = [&](float wx, float wz) { return Vec2(ox + (wx - wx0) * sc, oy + (wz - wz0) * sc); };
     clip(x, y, w, h);
     // grid
@@ -1017,7 +1048,7 @@ void draw_map(Game& g, float x, float y, float w, float h) {
         line(cj.x, cj.y, j.x, j.y, 2.0f, col(C_BPINK, 0.55f));
     }
     // labels
-    float ls = std::max(8.5f, 10.0f * TK * std::min(1.0f, w / 520.0f));
+    float ls = clampv(sc * 3.0f, 9.0f, 12.5f) * TK / U;
     for (const MapLabel& m : MAP_LABELS) {
         Vec2 p = P(m.x, m.z);
         text(FONT_SANS, m.name, p.x, p.y + ls * 0.35f, ls, col(C_BPINK, 0.95f), 1);
@@ -1044,6 +1075,8 @@ void draw_map(Game& g, float x, float y, float w, float h) {
         if (std::fmod((float)g.time, 1.0f) < 0.6f) ring(p.x, p.y, 10.0f, 1.5f, col(C_AMBER, 0.6f), 20);
     }
     noclip();
+    if (button("+", x + w - bsz - 8 * U, y + h - 2 * bsz - 14 * U, bsz, bsz)) g_mapZoom = std::min(4.0f, g_mapZoom * 1.4f);
+    if (button("-", x + w - bsz - 8 * U, y + h - bsz - 8 * U, bsz, bsz)) g_mapZoom = std::max(1.0f, g_mapZoom / 1.4f);
     text(FONT_SANS, "N", x + w - 16 * U, y + 20 * U, 14 * TK, col(C_BPINK, 0.8f), 1);
     line(x + w - 16 * U, y + 24 * U, x + w - 16 * U, y + 40 * U, 1.5f, col(C_BPINK, 0.8f));
 }
@@ -1091,8 +1124,9 @@ void draw_journal(Game& g, InputState& in) {
         break;
     }
     case 1:
-        draw_map(g, cx, cy, cw, ch);
-        text(FONT_SANS, "Red circles: where the foreman's notes point you next.", cx, cy + ch + ts * 1.2f, ts * 0.78f, col(C_DIM));
+        draw_map(g, cx, cy, cw, ch, in);
+        text(FONT_SANS, in.touchMode ? "Red circles: where the notes point you next. Drag to pan, +/- to zoom." : "Red circles: where the notes point you next. Drag to pan, wheel to zoom.",
+             cx, cy + ch + ts * 1.2f, ts * 0.78f, col(C_DIM));
         break;
     case 2:
     case 3: {
@@ -1496,16 +1530,17 @@ void ui_draw(Game& g, Settings& s, InputState& in, const LoadState& ls, float dt
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     ptr_update(in);
     g_lockRects.clear();
-    if (g_ptr.released || !g_ptr.down) {
-        if (g_ptr.released || !g_ptr.has) { g_pressId = 0; }
-        if (!g_ptr.down) g_dragId = 0;
-    }
+    // a press survives until the frame its release is seen (that frame's buttons need it)
+    if (!g_ptr.down && !g_ptr.released) { g_pressId = 0; g_dragId = 0; }
     if (!ls.done) {
         draw_loading(ls);
     } else if (g.appMode == AM_TITLE) {
         if (g_lastAppMode != AM_TITLE) { g_titlePage = g_lastAppMode == -1 ? TP_GATE : TP_MAIN; g_lastStage = -1; }
         draw_title(g, s, in, dt);
     } else if (g.appMode == AM_PLAY) {
+        static int lastModal = MD_NONE;
+        if (g.modal == MD_JOURNAL && lastModal != MD_JOURNAL && lastModal != MD_NOTE) g_mapReset = true;
+        lastModal = g.modal;
         if (g.modal != MD_PAUSE) g_pausePage = PP_MAIN;
         if (g.modal == MD_NONE || g.modal == MD_PAUSE) draw_hud(g, s, in, dt, fps);
         if (g.modal == MD_NOTE) draw_note(g, in);
@@ -1517,7 +1552,7 @@ void ui_draw(Game& g, Settings& s, InputState& in, const LoadState& ls, float dt
     }
     g_lastAppMode = ls.done ? g.appMode : -1;
     g_lockRectsPrev = g_lockRects;
-    if (g_ptr.released) g_pressId = 0;
+    if (g_ptr.released) { g_pressId = 0; g_dragId = 0; }
     flush();
     noclip();
     glDisable(GL_BLEND);

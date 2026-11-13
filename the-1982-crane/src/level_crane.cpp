@@ -571,6 +571,36 @@ void build_rigger(Builder& b) {
     b.m(M_RUST, 0x808078, 2.0f);
     for (int i = 0; i < 4; i++) b.box(Vec3(-0.02f, 0.15f + i * 0.17f, 0.13f), Vec3(0.02f, 0.19f + i * 0.17f, 0.145f)); // buckles
     b.box(Vec3(-0.21f, 0.02f, -0.13f), Vec3(0.21f, 0.08f, 0.14f));        // belt
+    // hunched back, collar turned up
+    b.m(M_OILSKIN, 0xffffff, 1.0f);
+    b.box(Vec3(-0.25f, 0.55f, -0.21f), Vec3(0.25f, 0.92f, -0.1f));
+    b.box(Vec3(-0.17f, 0.88f, -0.16f), Vec3(0.17f, 1.0f, 0.06f));
+    // a mooring line wound round it, the way you would tie off a load
+    b.m(M_TARP, 0x6a5a3a, 2.0f);
+    b.beam(Vec3(-0.23f, 0.18f, 0.15f), Vec3(0.23f, 0.62f, 0.15f), 0.035f);
+    b.beam(Vec3(0.23f, 0.62f, 0.15f), Vec3(0.23f, 0.7f, -0.14f), 0.035f);
+    b.beam(Vec3(-0.23f, 0.3f, 0.15f), Vec3(0.2f, 0.82f, 0.13f), 0.03f);
+    // torn hem: strips of coat and weed of uneven length
+    {
+        Rng hr(1103);
+        for (int i = 0; i < 12; i++) {
+            float a0 = (float)i / 12.0f * TAU;
+            float px = std::cos(a0) * 0.235f, pz = std::sin(a0) * 0.145f + 0.005f;
+            float len = hr.range(0.08f, 0.42f);
+            if (i & 1) b.m(M_KELP, 0xffffff, 2.0f); else b.m(M_OILSKIN, 0xffffff, 2.0f);
+            b.box(Vec3(px - 0.035f, -0.62f - len, pz - 0.012f), Vec3(px + 0.035f, -0.6f, pz + 0.012f));
+        }
+    }
+    // barnacles on the shoulders, and a red lockout tag on the belt
+    b.m(M_KELP, 0xc8c8b8, 3.0f);
+    for (int i = 0; i < 9; i++) {
+        float bx = (i % 2 ? 1.0f : -1.0f) * (0.12f + 0.03f * (i % 4)), bz = -0.12f + 0.05f * (i % 5);
+        b.box(Vec3(bx - 0.025f, 0.9f, bz - 0.025f), Vec3(bx + 0.025f, 0.94f + 0.01f * (i % 3), bz + 0.025f));
+    }
+    b.m(M_PLAIN, 0xa01410, 2.0f);
+    b.box(Vec3(0.1f, -0.2f, 0.145f), Vec3(0.17f, 0.04f, 0.15f));
+    b.m(M_RUST, 0xb09a40, 2.0f);
+    b.box(Vec3(0.11f, 0.03f, 0.14f), Vec3(0.16f, 0.09f, 0.16f));
     b.named(DY_RIG_TORSO, b.endDyn(), Mat4::identity(), false);
     // head (origin at the neck)
     b.beginDyn();
@@ -591,6 +621,17 @@ void build_rigger(Builder& b) {
     b.m(M_PAINTSTEEL, 0x7a6a20, 2.0f);                                       // hard hat
     b.cyl(Vec3(0, 0.33f, -0.01f), Vec3(0, 0.46f, -0.01f), 0.14f, 8, true, 0.1f);
     b.cyl(Vec3(0, 0.33f, 0.0f), Vec3(0, 0.345f, 0.0f), 0.185f, 8, true);
+    // weed hanging off the brim
+    b.m(M_KELP, 0xffffff, 3.0f);
+    {
+        Rng kr(77);
+        for (int i = 0; i < 7; i++) {
+            float a0 = 0.6f + (float)i / 7.0f * (TAU - 1.2f);
+            float px = std::cos(a0) * 0.17f, pz = -std::fabs(std::sin(a0)) * 0.17f;
+            float len = kr.range(0.12f, 0.4f);
+            b.box(Vec3(px - 0.012f, 0.33f - len, pz - 0.012f), Vec3(px + 0.012f, 0.335f, pz + 0.012f));
+        }
+    }
     b.named(DY_RIG_HEAD, b.endDyn(), Mat4::identity(), false);
     // arms
     for (int side = 0; side < 2; side++) {

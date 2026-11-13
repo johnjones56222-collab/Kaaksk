@@ -519,7 +519,9 @@ static void buildTruck(Builder& b, const Vec3& pos) {
     w.lightTruckL = b.spot(Vec3(-0.73f, 0.85f, -2.62f), Vec3(-0.03f, -0.1f, -1), 30.0f, 0xfff0c8, 2.6f, 36.0f, LG_ALWAYS, FL_NONE, 0.55f);
     w.lightTruckR = b.spot(Vec3(0.73f, 0.85f, -2.62f), Vec3(0.03f, -0.1f, -1), 30.0f, 0xfff0c8, 2.6f, 36.0f, LG_ALWAYS, FL_NONE, 0.55f);
     b.light(Vec3(0, 0.9f, 3.0f), 0xff2010, 0.5f, 4.0f, LG_ALWAYS, FL_NONE, 0.0f);
-    b.interact(IK_USE, U_TRUCK, Vec3(-1.3f, 0.3f, -1.4f), Vec3(1.3f, 1.9f, 0.5f), 2.6f);
+    // the two cab doors
+    b.interact(IK_USE, U_TRUCK, Vec3(0.85f, 0.45f, -0.95f), Vec3(1.15f, 1.8f, 0.3f), 2.6f);
+    b.interact(IK_USE, U_TRUCK, Vec3(-1.15f, 0.45f, -0.95f), Vec3(-0.85f, 1.8f, 0.3f), 2.6f);
     b.pop();
     // flashlight on the hood
     beginItem(b);

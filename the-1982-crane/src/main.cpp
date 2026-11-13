@@ -229,6 +229,32 @@ EMSCRIPTEN_KEEPALIVE int app_debug_load(const char* save) {
     return game_load(*G, save) ? 1 : 0;
 }
 EMSCRIPTEN_KEEPALIVE int app_draw_calls() { return render_stats().drawCalls; }
+EMSCRIPTEN_KEEPALIVE float app_query(int what) {
+    if (!G || !LS.done) return -999.0f;
+    Game& g = *G;
+    switch (what) {
+    case 0: return g.pos.x;
+    case 1: return g.pos.y;
+    case 2: return g.pos.z;
+    case 3: return g.yaw;
+    case 4: return (float)g.stage;
+    case 5: return (float)g.modal;
+    case 6: return (float)g.pstate;
+    case 7: return g.flashOn ? 1.0f : 0.0f;
+    case 8: return g.have[IT_FLASHLIGHT] ? 1.0f : 0.0f;
+    case 9: return g.crane.hoist;
+    case 10: return g.crane.slew;
+    case 11: return (float)g.keypadEntry.size();
+    case 12: return g.flags[F_KEYCAB_OPEN] ? 1.0f : 0.0f;
+    case 13: return (float)g.appMode;
+    case 14: return IN.touchMode ? 1.0f : 0.0f;
+    case 15: return (float)g.promptIdx;
+    case 16: return g.crouched ? 1.0f : 0.0f;
+    case 17: return g.pitch;
+    case 18: return g.promptIdx >= 0 ? (float)(g.w.interacts[(size_t)g.promptIdx].kind * 100 + g.w.interacts[(size_t)g.promptIdx].arg) : -1.0f;
+    default: return 0.0f;
+    }
+}
 EMSCRIPTEN_KEEPALIVE void app_focus_lost() {
     for (int i = 0; i < K_COUNT; i++) IN.down[i] = false;
     IN.mdown = false;

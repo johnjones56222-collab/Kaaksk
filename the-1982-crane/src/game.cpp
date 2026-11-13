@@ -577,6 +577,8 @@ static int pick_interact(const Game& g, const Vec3& o, const Vec3& d) {
         }
         float t;
         if (!rayAABB(ro, rd, it.box, it.range, t)) continue;
+        // standing inside a big volume: rank it by its centre so things in front of it still win
+        if (t <= 0.0f) t = std::min(it.range * 0.95f, length(it.box.center() - ro));
         if (t >= bestT) continue;
         if (interact_prompt(g, (int)i).empty()) continue; // nothing to do with it right now: look past it
         bestT = t; best = (int)i;
