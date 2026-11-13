@@ -2,6 +2,7 @@
 # Builds The 1982 Crane for the browser with Emscripten.
 #   ./build_web.sh            -> dist/the-1982-crane.html (single self-contained file)
 #   ./build_web.sh debug      -> build-debug/index.html (+ .js/.wasm, assertions on)
+#   ./build_web.sh artifact   -> build-artifact/the-1982-crane.html (WebAssembly + JavaScript fallback in one page)
 set -e
 cd "$(dirname "$0")"
 EMCC="${EMCC:-em++}"
@@ -17,8 +18,14 @@ if [ "$1" = "debug" ]; then
   mkdir -p build-debug
   $EMCC $SRC -O1 -g2 -sASSERTIONS=2 $COMMON -o build-debug/index.html
   echo "built build-debug/index.html"
+elif [ "$1" = "artifact" ]; then
+  # one page holding the WebAssembly build and a pure-JavaScript fallback
+  mkdir -p build-artifact build-js dist
+  $EMCC $SRC -O3 -sASSERTIONS=0 -sSINGLE_FILE=1 -sSINGLE_FILE_BINARY_ENCODE=0 $COMMON -o dist/the-1982-crane.html
+  $EMCC $SRC -O3 -sASSERTIONS=0 -sSINGLE_FILE=1 -sSINGLE_FILE_BINARY_ENCODE=0 -sWASM=0 $COMMON -o build-js/index.html
+  python3 tools/make_artifact.py dist/the-1982-crane.html build-js/index.html build-artifact/the-1982-crane.html
 else
   mkdir -p dist
-  $EMCC $SRC -O3 -sASSERTIONS=0 -sSINGLE_FILE=1 $COMMON -o dist/the-1982-crane.html
+  $EMCC $SRC -O3 -sASSERTIONS=0 -sSINGLE_FILE=1 -sSINGLE_FILE_BINARY_ENCODE=0 $COMMON -o dist/the-1982-crane.html
   ls -la dist/the-1982-crane.html
 fi

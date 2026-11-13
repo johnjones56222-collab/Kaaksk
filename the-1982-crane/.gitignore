@@ -1,2 +1,4 @@
 build-debug/
 build-native/
+build-js/
+build-artifact/

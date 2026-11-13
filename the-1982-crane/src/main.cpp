@@ -46,6 +46,12 @@ EM_JS(void, js_storage_get, (const char* key, char* out, int cap), {
 EM_JS(void, js_storage_set, (const char* key, const char* val), {
     try { localStorage.setItem(UTF8ToString(key), UTF8ToString(val)); } catch (e) {}
 });
+EM_JS(void, js_canvas_offset, (float* out), {
+    const cv = Module.canvas || document.getElementById('canvas');
+    const r = cv.getBoundingClientRect();
+    HEAPF32[out >> 2] = r.left;
+    HEAPF32[(out >> 2) + 1] = r.top;
+});
 EM_JS(int, js_is_touch, (), {
     try { return (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ? 1 : 0; } catch (e) { return 0; }
 });
@@ -308,17 +314,18 @@ static EM_BOOL on_key(int type, const EmscriptenKeyboardEvent* e, void*) {
     return EM_TRUE;
 }
 
+static float g_canvasOfs[2] = {0, 0};
 static EM_BOOL on_mouse(int type, const EmscriptenMouseEvent* e, void*) {
     if (type == EMSCRIPTEN_EVENT_MOUSEMOVE) {
         IN.mdx += (float)e->movementX;
         IN.mdy += (float)e->movementY;
-        IN.mx = (float)e->clientX;
-        IN.my = (float)e->clientY;
+        IN.mx = (float)e->clientX - g_canvasOfs[0];
+        IN.my = (float)e->clientY - g_canvasOfs[1];
         return EM_FALSE;
     }
     if (e->button != 0) return EM_FALSE;
-    IN.mx = (float)e->clientX;
-    IN.my = (float)e->clientY;
+    IN.mx = (float)e->clientX - g_canvasOfs[0];
+    IN.my = (float)e->clientY - g_canvasOfs[1];
     IN.touchMode = false;
     if (type == EMSCRIPTEN_EVENT_MOUSEDOWN) { IN.mdown = true; IN.mpressed = true; }
     else if (type == EMSCRIPTEN_EVENT_MOUSEUP) { IN.mdown = false; IN.mreleased = true; }
@@ -450,6 +457,7 @@ static void update_canvas() {
         g_fbW = w; g_fbH = h;
     }
     IN.W = (float)cw; IN.H = (float)ch; IN.dpr = (float)dpr;
+    js_canvas_offset(g_canvasOfs);
 }
 
 static void frame() {

@@ -44,8 +44,10 @@ The game detects touch screens and switches to on-screen controls, lower graphic
 Requirements: [Emscripten](https://emscripten.org) (built and tested with 7.0.0) for the game, and g++ for the native test tools.
 
 ```sh
-./build_web.sh          # release: dist/the-1982-crane.html (single file)
-./build_web.sh debug    # build-debug/index.html + .js + .wasm, assertions on
+./build_web.sh            # release: dist/the-1982-crane.html (single file)
+./build_web.sh debug      # build-debug/index.html + .js + .wasm, assertions on
+./build_web.sh artifact   # one page carrying the WebAssembly build and a pure-JavaScript
+                          # fallback, for hosts that refuse to compile WebAssembly
 ```
 
 ## Tests
