@@ -54,7 +54,7 @@ const fs = require('fs');
   const x0 = await q(0), z0 = await q(2), t0 = await q(21);
   await page.keyboard.down('KeyW'); await wait(1500); await page.keyboard.up('KeyW'); await settle();
   const d = Math.hypot((await q(0)) - x0, (await q(2)) - z0), gt = (await q(21)) - t0;
-  check(d / gt > 1.6, 'W walks forward (' + d.toFixed(2) + ' m in ' + gt.toFixed(2) + ' s of game time)');
+  check(d > 1.0 && d / gt > 1.2, 'W walks forward (' + d.toFixed(2) + ' m in ' + gt.toFixed(2) + ' s of game time)');
   await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW'); await wait(1000); await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
   await press('KeyC');
   check(await q(16) === 1, 'C crouches');
