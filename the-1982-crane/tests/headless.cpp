@@ -401,6 +401,8 @@ struct Bot {
 // ---------------------------------------------------------------------------
 static bool finite3(const Vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 
+static std::vector<std::string> g_collectedSaves;
+
 struct RunResult {
     bool completed = false;
     int ending = 0;
@@ -409,9 +411,12 @@ struct RunResult {
     int stageReached = 0;
 };
 
-static RunResult run(Game& g, int ending, int difficulty, bool riggerHarmless, double maxTime, const char* label) {
+static RunResult run(Game& g, int ending, int difficulty, bool riggerHarmless, double maxTime, const char* label, const std::string* fromSave = nullptr) {
     RunResult res;
-    game_new(g, difficulty);
+    if (fromSave) {
+        if (!game_load(g, *fromSave)) { printf("  FAIL: could not load save\n"); g_failures++; return res; }
+        maxTime += g.time;
+    } else game_new(g, difficulty);
     Bot bot(g);
     bot.wantEnding = ending;
     const float dt = 1.0f / 60.0f;
@@ -467,6 +472,7 @@ static RunResult run(Game& g, int ending, int difficulty, bool riggerHarmless, d
         // every fresh checkpoint must survive a save/load round trip
         if (g.wantSave) {
             g.wantSave = false;
+            if (!g.saveData.empty() && (g_collectedSaves.empty() || g_collectedSaves.back() != g.saveData)) g_collectedSaves.push_back(g.saveData);
             if (!g.saveData.empty()) {
                 static Game* probe = nullptr;
                 if (!probe) { probe = new Game(); game_init(*probe); }
@@ -532,6 +538,27 @@ int main(int argc, char** argv) {
     if (mode == "b" || mode == "all") {
         RunResult r = run(g, 2, 1, true, 3600.0, "ENDING B: land it (rigger cannot see the bot)");
         CHECK(r.completed && r.ending == 2, "ending B was not reached");
+    }
+    if (mode == "resume" || mode == "all") {
+        // resume from every checkpoint of a full playthrough and finish from there
+        g_collectedSaves.clear();
+        run(g, 2, 1, true, 3600.0, "RESUME: collecting checkpoints");
+        std::vector<std::string> saves = g_collectedSaves;
+        printf("  %zu checkpoints collected\n", saves.size());
+        int ok = 0;
+        for (size_t i = 0; i < saves.size(); i++) {
+            int stage = atoi(saves[i].c_str() + saves[i].find("stage=") + 6);
+            int want = (i % 2) ? 1 : 2;
+            if (stage >= ST_ESCAPE) want = stage == ST_ESCAPE ? 1 : 2;
+            std::string label = strf("RESUME from checkpoint %zu (stage %d), ending %d", i, stage, want);
+            bool v = g_verbose;
+            g_verbose = false;
+            RunResult r = run(g, want, 1, true, 1500.0, label.c_str(), &saves[i]);
+            g_verbose = v;
+            CHECK(r.completed && r.ending == want, "could not finish from checkpoint %zu (stage %d)", i, stage);
+            if (r.completed) ok++;
+        }
+        printf("  finished from %d of %zu checkpoints\n", ok, saves.size());
     }
     if (mode == "chaos" || mode == "all") {
         // the rigger hunts for real; the bot never hides, so deaths are expected.

@@ -324,6 +324,12 @@ bool game_load(Game& g, const std::string& data) {
     if (seated || g.stage == ST_CAB || g.stage == ST_LOAD) {
         g.pstate = PS_SEATED;
         g.seatYaw = 0; g.seatPitch = -0.1f;
+        // everything in the cab is usable again (apply_world_state ran before we sat down)
+        World& w = g.w;
+        w.interacts[(size_t)w.cabNoteInteract].enabled = true;
+        w.interacts[(size_t)w.cabControlsInteract].enabled = true;
+        w.interacts[(size_t)w.cabLeaveInteract].enabled = true;
+        w.interacts[(size_t)w.itemInteract[IT_TAPE6]].enabled = !g.itemTaken[IT_TAPE6];
     }
     g.fade = 1.0f; g.fadeTarget = 0.0f; g.fadeSpeed = 0.6f;
     return true;
@@ -372,6 +378,14 @@ void apply_world_state(Game& g) {
         if (l.group == LG_YARD || l.group == LG_INDOOR) l.on = true; // gated by powerUp
     // pump house
     g.waterLevel = g.flags[F_DRAINED] ? -0.3f : 0.34f;
+    // timers that were running when the checkpoint was written are not part of the save: re-arm them
+    if (g.appMode == AM_PLAY) {
+        if (g.flags[F_VALVES_DONE] && !g.flags[F_DRAINED]) {
+            g.waterLevel = 0.1f;
+            schedule(g, 6.0f, TC_DRAIN_DONE);
+        }
+        if (g.flags[F_GEN_RUNNING] && !g.flags[F_RIGGER_ACTIVE] && g.stage < ST_CAB) schedule(g, 20.0f, TC_RIGGER_RELEASE);
+    }
     w.dyn[DY_LOTO].visible = !g.flags[F_LOTO_CUT];
     w.interacts[(size_t)w.useInteract[U_LOTO]].enabled = !g.flags[F_LOTO_CUT];
     w.interacts[(size_t)w.useInteract[U_BREAKER]].enabled = g.flags[F_LOTO_CUT];
